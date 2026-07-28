@@ -31,7 +31,7 @@ ENV/
 .env.local
 
 # Database & Storage
-database/chroma_db/
+database/
 *.sqlite3
 *.db
 
