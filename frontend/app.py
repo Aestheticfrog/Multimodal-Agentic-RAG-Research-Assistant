@@ -1,7 +1,14 @@
 """Streamlit Modern Dashboard for ResearchPilot AI with standalone fallback & live resume analytics."""
 import os
+import sys
+from pathlib import Path
 import httpx
 import streamlit as st
+
+# Add project root directory to sys.path for Streamlit Cloud deployment
+root_dir = Path(__file__).resolve().parent.parent
+if str(root_dir) not in sys.path:
+    sys.path.insert(0, str(root_dir))
 
 st.set_page_config(
     page_title="Agentic Multimodal RAG – Research Assistant",
