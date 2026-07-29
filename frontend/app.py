@@ -46,22 +46,34 @@ st.markdown('<div class="sub-caption">Self-Correcting Research Assistant powered
 
 # Helper function for PDF parsing in standalone or API mode
 def process_pdf_upload(file):
+    is_api_online = False
     try:
-        files = {"file": (file.name, file.getvalue(), "application/pdf")}
-        response = httpx.post(f"{BACKEND_URL}/api/v1/upload", files=files, timeout=300.0)
-        if response.status_code == 200:
-            return response.json()["chunks_indexed"]
+        res = httpx.get(f"{BACKEND_URL}/", timeout=0.5)
+        if res.status_code == 200:
+            is_api_online = True
     except Exception:
+        is_api_online = False
+
+    if is_api_online:
         try:
-            from backend.app.utils.pdf_parser import parse_pdf_bytes
-            from backend.app.retrievers.vector_store import add_documents_to_vector_store
-            docs = parse_pdf_bytes(file.getvalue(), file.name)
-            if not docs:
-                return 0
-            return add_documents_to_vector_store(docs)
-        except Exception as e:
-            st.error(f"Failed to parse '{file.name}': {e}")
+            files = {"file": (file.name, file.getvalue(), "application/pdf")}
+            response = httpx.post(f"{BACKEND_URL}/api/v1/upload", files=files, timeout=30.0)
+            if response.status_code == 200:
+                return response.json()["chunks_indexed"]
+        except Exception:
+            pass
+
+    # Fast direct standalone mode for Streamlit Cloud (0ms delay)
+    try:
+        from backend.app.utils.pdf_parser import parse_pdf_bytes
+        from backend.app.retrievers.vector_store import add_documents_to_vector_store
+        docs = parse_pdf_bytes(file.getvalue(), file.name)
+        if not docs:
             return 0
+        return add_documents_to_vector_store(docs)
+    except Exception as e:
+        st.error(f"Failed to parse '{file.name}': {e}")
+        return 0
 
 
 def execute_agent_query(prompt_text):
