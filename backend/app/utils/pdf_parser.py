@@ -1,4 +1,4 @@
-"""Multimodal PDF and Research Paper Parser using PyMuPDF (fitz)."""
+"""Multimodal PDF and Research Paper Parser using PyMuPDF (fitz) with Multi-Mode Text Extraction."""
 import fitz  # PyMuPDF
 import logging
 from typing import List, Tuple
@@ -28,15 +28,29 @@ def split_text_into_chunks(text: str, chunk_size: int = 1000, chunk_overlap: int
 
 
 def parse_pdf_bytes(pdf_bytes: bytes, filename: str) -> List[Document]:
-    """Parses raw PDF bytes, extracts text per page along with visual metadata,
-    and returns chunked LangChain Document objects.
+    """Parses raw PDF bytes, extracts text per page with multi-mode fallback (text -> blocks -> words),
+    along with visual metadata, and returns chunked LangChain Document objects.
     """
     doc = fitz.open(stream=pdf_bytes, filetype="pdf")
     chunked_documents: List[Document] = []
 
     for page_num in range(len(doc)):
         page = doc[page_num]
+        
+        # Primary extraction: plain text
         text = page.get_text("text")
+
+        # Fallback 1: Text blocks
+        if not text.strip():
+            blocks = page.get_text("blocks")
+            text = "\n\n".join([b[4].strip() for b in blocks if len(b) >= 5 and isinstance(b[4], str) and b[4].strip()])
+
+        # Fallback 2: Word tuples
+        if not text.strip():
+            words = page.get_text("words")
+            if words:
+                text = " ".join([w[4] for w in words if len(w) >= 5 and isinstance(w[4], str)])
+
         images = page.get_images()
         has_images = len(images) > 0
 

@@ -193,6 +193,10 @@ with st.sidebar:
                 with st.spinner(f"Parsing & indexing '{file.name}'..."):
                     count = process_pdf_upload(file)
                     total_added += count
+                    if count == 0:
+                        st.warning(f"⚠️ '{file.name}' returned 0 text chunks. Check if the PDF is scanned or image-only.")
+                    else:
+                        st.info(f"✅ '{file.name}' indexed: {count} chunks")
             st.session_state.chunks_indexed += total_added
             st.success(f"Indexed {total_added} total chunks across {len(uploaded_files)} paper(s) successfully!")
 
