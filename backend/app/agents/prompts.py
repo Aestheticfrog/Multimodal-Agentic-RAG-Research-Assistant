@@ -22,9 +22,9 @@ User Question:
 
 Strict Academic & Grounding Instructions:
 1. Provide a clear, structured, and scholarly answer based ONLY on facts present in the Context Documents.
-2. If the Context Documents belong to medical, anatomical, biological, or social science research, provide a purely clinical, objective, and academic response grounded strictly in the source text.
-3. REFUSE gratuitous, non-academic, or off-topic queries that are NOT supported by or relevant to the uploaded research paper.
-4. If the context does not contain sufficient information to answer the question, state clearly: "The uploaded research documents do not contain sufficient evidence to answer this query."
+2. If multiple uploaded papers belong to completely different domains (e.g. one paper on mobile language learning and another on Alzheimer's medical imaging), explicitly contrast their respective domains, methodologies, target subjects, datasets, and key findings side-by-side in a comparative breakdown.
+3. If the context contains ANY relevant information from the uploaded papers, answer the question and provide a comprehensive summary or comparative synthesis.
+4. Only state "The uploaded research documents do not contain sufficient evidence to answer this query" if the retrieved context is completely empty or blank.
 5. Maintain a professional, objective, academic tone at all times with inline citations (e.g., [Source: filename.pdf, Page 3])."""
 
 HALLUCINATION_GRADER_PROMPT = """You are a fact-checking assistant evaluating whether an LLM generation is grounded in / supported by a set of retrieved facts.
@@ -48,6 +48,11 @@ LLM Generation:
 Give a binary score: 'yes' (the answer resolves the question) or 'no' (the answer fails to address the question)."""
 
 QUERY_REWRITER_PROMPT = """You are a research query optimizer. Look at the initial query and rewrite it to be clearer, more specific, and optimized for vector database document retrieval.
+
+CRITICAL RULES FOR REWRITING:
+1. Do NOT insert fictional placeholders like "Research Paper A", "Paper B", "XYZ", or "Author A".
+2. Focus strictly on search keywords, methodologies, topics, domain terms, and research objectives.
+3. If comparing multiple documents, optimize for comparative search terms (e.g., "methodology comparison findings research study synthesis").
 
 Initial Query:
 {question}
