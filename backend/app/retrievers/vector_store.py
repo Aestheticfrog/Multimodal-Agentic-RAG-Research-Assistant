@@ -61,7 +61,7 @@ def add_documents_to_vector_store(documents: List[Document]) -> int:
         return len(documents)
 
 
-def get_retriever(k: int = 10) -> Optional[VectorStoreRetriever]:
+def get_retriever(k: int = 16) -> Optional[VectorStoreRetriever]:
     """Returns LangChain retriever interface for vector store."""
     try:
         vs = get_vector_store()
