@@ -14,9 +14,11 @@ Powered by **LangGraph**, **Google Gemini**, **ChromaDB**, **FastAPI**, and **St
 ## 🌟 Key Features & Innovations
 
 - 🌐 **Dynamic Adaptive Retrieval & Source Stratification**: Classifies query intent automatically. Fact-based queries trigger targeted high-precision search ($k=6$), while comparative queries trigger deep multi-paper candidate retrieval ($k=20$) with balanced round-robin sampling across all uploaded PDF sources.
+- 🔀 **Smart Hybrid Execution Router**: Auto-detects active local FastAPI backend (`http://localhost:8000`) for developer setups while providing an embedded standalone engine on Streamlit Cloud with a manual Sidebar Execution Mode selector (`Auto-Detect`, `Force REST API`, `Force Standalone`).
 - 🎯 **Target Section Chunk Ranking & Keyword Match**: Pinpoints specific section queries (e.g., *Section 4.3*, *Table 1*, *Figure 2*) using exact regex token matching and automatically boosts target section chunks to the top of the LLM context window.
 - 💾 **Zero-Drop Raw PDF Bytes Persistence**: Resolves Streamlit Cloud session state serialization issues by storing raw PDF binary streams directly in memory and re-parsing dynamically per query for 100% document retrieval reliability.
 - 🛡️ **Resilient Failover Model Pool (`ResilientGeminiLLM`)**: Solves free-tier API rate limits (HTTP 429) by dynamically rotating requests across model candidates (`gemini-3.5-flash-lite`, `gemini-3.5-flash`, `gemini-3.1-flash-lite`, `gemini-3-flash`) in <50ms.
+- 📝 **Standalone & REST Literature Review Synthesis**: Generates 5-part academic literature review reports directly in both local FastAPI REST API mode and standalone Streamlit Cloud deployment.
 - 🔒 **Context-Aware Security Guardrails**: Built-in input moderation and domain-grounding constraints to block off-topic or explicit queries while supporting objective, clinical scientific responses for medical research papers.
 - 📊 **Visual Figure & Table Commentary Mode**: Automatically detects visual query keywords (`figure`, `table`, `graph`, `plot`) and routes to specialized prompt logic for statistical chart and diagram analysis.
 - 🔄 **Transparent Query Optimization Breakdown**: Interactive UI expander displaying side-by-side comparison of original user prompts vs. agent-rewritten search queries.
