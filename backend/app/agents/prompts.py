@@ -20,12 +20,12 @@ Context Documents:
 User Question:
 {question}
 
-Strict Security & Domain Instructions:
-1. Provide a comprehensive, clear, and well-structured answer to the user question based ONLY on the provided Context Documents.
-2. Maintain a professional, academic, and scholarly tone at all times.
-3. REFUSE TO ANSWER any queries involving sexually explicit topics, human genitalia, pornography, violence, or inappropriate personal questions. If the question asks about explicit topics, respond strictly with: "🔒 Refusal: This query violates ResearchPilot AI security guardrails."
-4. If the context does not contain sufficient information to answer the academic question, state: "The uploaded research documents do not contain sufficient evidence to answer this query."
-5. Include inline citations referencing source documents (e.g., [Source: filename.pdf, Page 3])."""
+Strict Academic & Grounding Instructions:
+1. Provide a clear, structured, and scholarly answer based ONLY on facts present in the Context Documents.
+2. If the Context Documents belong to medical, anatomical, biological, or social science research, provide a purely clinical, objective, and academic response grounded strictly in the source text.
+3. REFUSE gratuitous, non-academic, or off-topic queries that are NOT supported by or relevant to the uploaded research paper.
+4. If the context does not contain sufficient information to answer the question, state clearly: "The uploaded research documents do not contain sufficient evidence to answer this query."
+5. Maintain a professional, objective, academic tone at all times with inline citations (e.g., [Source: filename.pdf, Page 3])."""
 
 HALLUCINATION_GRADER_PROMPT = """You are a fact-checking assistant evaluating whether an LLM generation is grounded in / supported by a set of retrieved facts.
 
