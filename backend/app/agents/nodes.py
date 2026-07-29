@@ -107,7 +107,7 @@ def generate_answer_node(state: AgentState) -> AgentState:
     Automatically switches to FIGURE_ANALYZER_PROMPT if the user asks specifically about figures, graphs, or charts.
     """
     logger.info("--- NODE: GENERATE ANSWER ---")
-    question = state["question"]
+    question = state.get("original_question", state["question"])
     documents = state.get("documents", [])
 
     llm = get_gemini_llm(temperature=0.2)
@@ -150,6 +150,7 @@ def transform_query_node(state: AgentState) -> AgentState:
     """Rewrites user query to optimize vector DB search recall."""
     logger.info("--- NODE: TRANSFORM QUERY ---")
     question = state["question"]
+    orig_q = state.get("original_question", question)
     retry_count = state.get("retry_count", 0)
 
     from backend.app.utils.security import moderate_query
@@ -159,10 +160,11 @@ def transform_query_node(state: AgentState) -> AgentState:
         return {
             **state,
             "question": question,
+            "original_question": orig_q,
             "retry_count": retry_count + 1,
         }
 
-    llm = get_gemini_llm(temperature=0.4)
+    llm = get_gemini_llm(temperature=0.2)
     prompt = ChatPromptTemplate.from_template(QUERY_REWRITER_PROMPT)
     formatted_prompt = prompt.format(question=question)
 
@@ -170,11 +172,21 @@ def transform_query_node(state: AgentState) -> AgentState:
     raw_content = response.content if hasattr(response, "content") else str(response)
     better_query = extract_text_content(raw_content)
 
-    logger.info(f"Query rewritten: '{question}' -> '{better_query}'")
+    import re
+    clean_q = re.sub(r"^(improved query|optimized query|rewritten query|search keywords):\s*", "", better_query, flags=re.IGNORECASE)
+    clean_q = re.sub(r"\[.*?\]", "", clean_q)
+    clean_q = re.sub(r"<.*?>", "", clean_q)
+    clean_q = clean_q.strip().strip('"').strip("'").strip("`")
+
+    if not clean_q or len(clean_q) < 5 or "[" in clean_q or "]" in clean_q or "paper a" in clean_q.lower():
+        clean_q = orig_q
+
+    logger.info(f"Query rewritten: '{question}' -> '{clean_q}'")
 
     return {
         **state,
-        "question": better_query.strip(),
+        "question": clean_q,
+        "original_question": orig_q,
         "retry_count": retry_count + 1,
     }
 

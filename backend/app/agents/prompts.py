@@ -55,17 +55,19 @@ LLM Generation:
 
 Give a binary score: 'yes' (the answer resolves the question) or 'no' (the answer fails to address the question)."""
 
-QUERY_REWRITER_PROMPT = """You are a research query optimizer. Look at the initial query and rewrite it to be clearer, more specific, and optimized for vector database document retrieval.
+QUERY_REWRITER_PROMPT = """You are a search query optimizer for a RAG vector database. 
+Rewrite the initial user query into a clean, concise, high-recall search keyword string.
 
-CRITICAL RULES FOR REWRITING:
-1. Do NOT insert fictional placeholders like "Research Paper A", "Paper B", "XYZ", or "Author A".
-2. Focus strictly on search keywords, methodologies, topics, domain terms, and research objectives.
-3. If comparing multiple documents, optimize for comparative search terms (e.g., "methodology comparison findings research study synthesis").
+CRITICAL RULES:
+1. Output ONLY the raw search keywords on a single line.
+2. Do NOT include prefixes like "Improved Query:", "Optimized Query:", or quotation marks.
+3. Do NOT use brackets, variables, or fictional placeholders like [Paper A Title/Topic], [Paper B], or <Insert Topic>.
+4. If comparing documents, output comparative research keywords (e.g., comparative synthesis research topics methodology findings datasets).
 
 Initial Query:
 {question}
 
-Improved Query:"""
+Search Keywords:"""
 
 FIGURE_ANALYZER_PROMPT = """You are ResearchPilot AI, a specialized research assistant analyzing figures, graphs, charts, diagrams, and visual plots in academic literature.
 
