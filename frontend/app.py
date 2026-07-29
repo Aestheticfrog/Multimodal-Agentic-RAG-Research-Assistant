@@ -186,15 +186,17 @@ with tab_chat:
                         st.markdown(answer)
                         final_question = data.get("question")
                         orig_question = data.get("original_question", prompt)
+                        is_guarded = "🔒 Security Guardrail" in answer
 
-                        with st.expander("🔍 LangGraph Agent Execution Info", expanded=(retry_count > 0)):
-                            if retry_count > 0 or (final_question and final_question.strip() != orig_question.strip()):
-                                st.warning(f"🔄 **Query Autocorrected / Transformed** ({retry_count} transformation loops)")
-                                st.markdown(f"**Original Prompt:** `{orig_question}`")
-                                st.markdown(f"**Optimized Query:** `{final_question}`")
-                            else:
-                                st.success("⚡ **Direct Match**: Retrieved relevant context on the first pass without needing query rewrite.")
-                                st.markdown(f"**Executed Query:** `{orig_question}`")
+                        if not is_guarded:
+                            with st.expander("🔍 LangGraph Agent Execution Info", expanded=(retry_count > 0)):
+                                if retry_count > 0 or (final_question and final_question.strip() != orig_question.strip()):
+                                    st.warning(f"🔄 **Query Autocorrected / Transformed** ({retry_count} transformation loops)")
+                                    st.markdown(f"**Original Prompt:** `{orig_question}`")
+                                    st.markdown(f"**Optimized Query:** `{final_question}`")
+                                else:
+                                    st.success("⚡ **Direct Match**: Retrieved relevant context on the first pass without needing query rewrite.")
+                                    st.markdown(f"**Executed Query:** `{orig_question}`")
 
                         st.session_state.messages.append({"role": "assistant", "content": answer})
                         st.session_state["latest_citations"] = citations
