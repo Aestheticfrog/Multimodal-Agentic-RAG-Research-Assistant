@@ -29,7 +29,17 @@ def _is_backend_online():
             st.session_state["backend_online"] = False
     return st.session_state["backend_online"]
 
-IS_BACKEND_ONLINE = _is_backend_online()
+def should_use_backend():
+    """Determines whether to use FastAPI REST API or Standalone Direct Engine.
+    Respects user mode selection (Auto-Detect, Force Backend, Force Standalone).
+    """
+    mode = st.session_state.get("execution_mode", "Auto-Detect (Smart Routing)")
+    if mode == "🌐 Force FastAPI REST API":
+        return True
+    elif mode == "⚡ Force Standalone Direct Engine":
+        return False
+    # Default: Auto-Detect
+    return _is_backend_online()
 
 # ─── Persist Dir for ChromaDB ───
 PERSIST_DIR_ABS = str(root_dir / "database" / "chroma_store")
@@ -49,7 +59,7 @@ st.markdown('<div class="sub-caption">Self-Correcting Research Assistant powered
 # Helper: Parse & store PDF in BOTH session state and ChromaDB
 # ═══════════════════════════════════════════════════════════
 def process_pdf_upload(file):
-    if IS_BACKEND_ONLINE:
+    if should_use_backend():
         try:
             files = {"file": (file.name, file.getvalue(), "application/pdf")}
             response = httpx.post(f"{BACKEND_URL}/api/v1/upload", files=files, timeout=30.0)
@@ -107,7 +117,7 @@ def execute_agent_query(prompt_text):
             "retry_count": 0,
         }
 
-    if IS_BACKEND_ONLINE:
+    if should_use_backend():
         try:
             response = httpx.post(
                 f"{BACKEND_URL}/api/v1/query",
@@ -163,7 +173,7 @@ def execute_agent_query(prompt_text):
 
 
 def execute_literature_review(topic_text):
-    if IS_BACKEND_ONLINE:
+    if should_use_backend():
         try:
             res = httpx.post(
                 f"{BACKEND_URL}/api/v1/literature-review",
@@ -237,9 +247,16 @@ def reset_library():
 # Sidebar Setup
 # ═══════════════════════════════════════════════════════════
 with st.sidebar:
-    st.header("⚙️ System Status")
-    if IS_BACKEND_ONLINE:
-        st.success("🟢 REST API Backend: Online")
+    st.header("⚙️ System Configuration")
+    mode = st.selectbox(
+        "Execution Mode",
+        ["Auto-Detect (Smart Routing)", "🌐 Force FastAPI REST API", "⚡ Force Standalone Direct Engine"],
+        key="execution_mode",
+        help="Auto-Detect automatically connects to your local FastAPI server on port 8000 when running locally, and switches to Standalone Direct Engine when deployed on Streamlit Cloud."
+    )
+
+    if should_use_backend():
+        st.success("🟢 REST API Backend: Connected (http://localhost:8000)")
     else:
         st.info("⚡ Mode: Standalone Direct Agent Engine (Streamlit Cloud Active)")
 
