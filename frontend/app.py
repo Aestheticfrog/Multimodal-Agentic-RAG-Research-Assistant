@@ -128,6 +128,32 @@ def execute_literature_review(topic_text):
         return {"topic": topic_text, "executive_summary": summary, "full_report": report}
 
 
+def get_library_summary():
+    try:
+        import chromadb
+        client = chromadb.PersistentClient(path="./database/chroma_store")
+        collection = client.get_or_create_collection(name="unified_research_papers")
+        data = collection.get(include=["metadatas"])
+        metadatas = data.get("metadatas", [])
+        counts = {}
+        for m in metadatas:
+            if m and "source" in m:
+                src = str(m["source"])
+                counts[src] = counts.get(src, 0) + 1
+        return counts
+    except Exception:
+        return {}
+
+
+def reset_library():
+    try:
+        import shutil
+        if os.path.exists("./database/chroma_store"):
+            shutil.rmtree("./database/chroma_store")
+    except Exception:
+        pass
+
+
 # Sidebar Setup
 with st.sidebar:
     st.header("⚙️ System Status")
@@ -160,24 +186,20 @@ with st.sidebar:
 
     st.divider()
     st.header("📋 Active Paper Library")
-    try:
-        from backend.app.retrievers import get_indexed_sources_summary, clear_vector_store
-        sources_summary = get_indexed_sources_summary()
-        if sources_summary:
-            total_c = sum(sources_summary.values())
-            st.caption(f"Indexed Context: {total_c} chunks across {len(sources_summary)} paper(s)")
-            for src_file, count in sources_summary.items():
-                st.markdown(f"📄 **{src_file}** (`{count} chunks`)")
+    sources_summary = get_library_summary()
+    if sources_summary:
+        total_c = sum(sources_summary.values())
+        st.caption(f"Indexed Context: {total_c} chunks across {len(sources_summary)} paper(s)")
+        for src_file, count in sources_summary.items():
+            st.markdown(f"📄 **{src_file}** (`{count} chunks`)")
 
-            if st.button("🗑️ Reset Vector Library", use_container_width=True):
-                clear_vector_store()
-                st.session_state.chunks_indexed = 0
-                st.success("Vector library reset successfully!")
-                st.rerun()
-        else:
-            st.info("No research papers currently stored in ChromaDB. Upload a PDF above!")
-    except Exception as e:
-        st.caption(f"Library status: {e}")
+        if st.button("🗑️ Reset Vector Library", use_container_width=True):
+            reset_library()
+            st.session_state.chunks_indexed = 0
+            st.success("Vector library reset successfully!")
+            st.rerun()
+    else:
+        st.info("No research papers currently stored in ChromaDB. Upload a PDF above!")
 
 # Tabs
 tab_chat, tab_lit_review, tab_metrics = st.tabs(["💬 Agent Research Chat", "📝 Literature Review Generator", "📊 Live Resume Metrics & Architecture"])
