@@ -1,7 +1,8 @@
-"""ChromaDB Vector Store Management with Unified Zero-Crash Local Persistence & Library Inspector."""
+"""ChromaDB Vector Store Management with Unified Zero-Crash Local Persistence & Full Context Injection."""
 import os
 import uuid
 import logging
+from pathlib import Path
 from typing import List, Optional, Dict
 
 from langchain_community.vectorstores import Chroma
@@ -9,8 +10,6 @@ from langchain_core.documents import Document
 from langchain_core.vectorstores import VectorStoreRetriever
 
 logger = logging.getLogger("researchpilot.vectorstore")
-
-from pathlib import Path
 
 ROOT_DIR = Path(__file__).resolve().parent.parent.parent.parent
 PERSIST_DIR = os.getenv("CHROMA_PERSIST_DIR", str(ROOT_DIR / "database" / "chroma_store"))
@@ -78,9 +77,9 @@ def clear_vector_store():
 
 
 def retrieve_adaptive_documents(query: str) -> List[Document]:
-    """Dynamically detects query intent and performs adaptive, source-stratified vector retrieval.
-    - Comparative / Multi-paper queries -> Retrieves k=24 and performs balanced round-robin sampling across all source PDFs.
-    - Targeted / Fact queries -> High-precision k=6 search.
+    """Dynamically detects query intent and performs adaptive document retrieval.
+    - Comparative / Multi-paper queries -> Retrieves ALL stored document chunks across all uploaded PDFs directly from ChromaDB (full context injection).
+    - Targeted / Fact queries -> High-precision k=10 similarity search.
     """
     vs = get_vector_store()
     if vs is None:
@@ -88,38 +87,33 @@ def retrieve_adaptive_documents(query: str) -> List[Document]:
 
     comp_keywords = [
         "compare", "comparison", "difference", "between", "versus", "vs",
-        "both", "all papers", "literature review", "synthesis", "different", "two"
+        "both", "all papers", "literature review", "synthesis", "different", "two", "differnce", "papers"
     ]
     is_comparative = any(kw in query.lower() for kw in comp_keywords)
-    target_k = 24 if is_comparative else 6
+
+    if is_comparative:
+        try:
+            # Fetch ALL documents directly from collection to guarantee 100% multi-paper coverage
+            data = vs._collection.get(include=["documents", "metadatas"])
+            documents_list = data.get("documents", [])
+            metadatas_list = data.get("metadatas", [])
+
+            all_docs = []
+            for text, meta in zip(documents_list, metadatas_list):
+                if text:
+                    all_docs.append(Document(page_content=text, metadata=meta or {}))
+
+            if all_docs:
+                logger.info(f"Comparative Full Context Injection: Retrieved ALL {len(all_docs)} stored chunks across collection.")
+                return all_docs
+        except Exception as e:
+            logger.warning(f"Error retrieving all documents for comparison: {e}. Falling back to similarity search.")
 
     try:
-        raw_docs = vs.similarity_search(query, k=target_k)
-        if not raw_docs:
-            return []
-
-        if not is_comparative:
-            return raw_docs[:6]
-
-        # Group retrieved chunks by source file name
-        docs_by_source: Dict[str, List[Document]] = {}
-        for doc in raw_docs:
-            src = doc.metadata.get("source", "unknown")
-            if src not in docs_by_source:
-                docs_by_source[src] = []
-            docs_by_source[src].append(doc)
-
-        logger.info(f"Multi-Paper Sources Found in Vector Store: {list(docs_by_source.keys())}")
-
-        # Balanced sampling: up to 10 chunks per paper
-        stratified_docs: List[Document] = []
-        max_per_src = 10
-        for src, doc_list in docs_by_source.items():
-            stratified_docs.extend(doc_list[:max_per_src])
-
-        return stratified_docs if stratified_docs else raw_docs
+        raw_docs = vs.similarity_search(query, k=10)
+        return raw_docs if raw_docs else []
     except Exception as e:
-        logger.error(f"Error in adaptive document retrieval: {e}")
+        logger.error(f"Error in document retrieval: {e}")
         return []
 
 

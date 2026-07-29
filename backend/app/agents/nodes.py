@@ -164,6 +164,17 @@ def transform_query_node(state: AgentState) -> AgentState:
             "retry_count": retry_count + 1,
         }
 
+    # Bypass query rewriter for comparative prompts to eliminate 100% of LLM placeholder risk
+    comp_keywords = ["compare", "comparison", "difference", "differnce", "between", "versus", "vs", "both", "papers"]
+    if any(kw in question.lower() for kw in comp_keywords):
+        logger.info("Query rewriter bypassed for comparative prompt to preserve raw user prompt.")
+        return {
+            **state,
+            "question": orig_q,
+            "original_question": orig_q,
+            "retry_count": retry_count + 1,
+        }
+
     llm = get_gemini_llm(temperature=0.2)
     prompt = ChatPromptTemplate.from_template(QUERY_REWRITER_PROMPT)
     formatted_prompt = prompt.format(question=question)
