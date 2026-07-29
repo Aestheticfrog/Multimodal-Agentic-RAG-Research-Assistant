@@ -199,6 +199,9 @@ with st.sidebar:
     )
 
     if uploaded_files:
+        st.caption(f"📁 Selected for Indexing: **{len(uploaded_files)} PDF file(s)**")
+        for f in uploaded_files:
+            st.text(f"• {f.name}")
         if st.button("🚀 Process & Index All Uploaded Papers", type="primary", use_container_width=True):
             total_added = 0
             for file in uploaded_files:
