@@ -171,10 +171,49 @@ def execute_literature_review(topic_text):
                 timeout=300.0,
             )
             if res.status_code == 200:
-                return res.json().get("review", "")
+                data = res.json()
+                return data.get("full_report") or data.get("review") or ""
         except Exception:
             pass
-    return "Literature review generation requires the FastAPI backend. Please run the backend locally or deploy it."
+
+    # Standalone direct generation fallback (Streamlit Cloud)
+    try:
+        from backend.app.models.llm import get_gemini_llm
+        from backend.app.utils.pdf_parser import parse_pdf_bytes
+        from backend.app.agents.nodes import extract_text_content
+
+        fresh_docs = []
+        pdf_store = st.session_state.get("pdf_bytes_store", {})
+        for filename, pdf_bytes in pdf_store.items():
+            try:
+                parsed = parse_pdf_bytes(pdf_bytes, filename)
+                fresh_docs.extend(parsed)
+            except Exception:
+                pass
+
+        if not fresh_docs:
+            fresh_docs = list(st.session_state.get("in_memory_docs", []))
+
+        formatted_context = "\n---\n".join([d.page_content for d in fresh_docs[:15]]) if fresh_docs else "No specific PDF documents uploaded in active session."
+
+        llm = get_gemini_llm(temperature=0.3)
+        prompt = f"""You are a senior research professor writing a Literature Review Synthesis Report on the topic: '{topic_text}'.
+
+Available Research Evidence in Active Session:
+{formatted_context}
+
+Write a high-quality, structured Literature Review report in Markdown format including:
+1. Executive Summary
+2. Core Theoretical Foundations & Taxonomy
+3. Comparative Analysis of Approaches / Methodologies
+4. Key Research Gaps & Open Challenges
+5. Future Directions
+"""
+        res = llm.invoke(prompt)
+        raw_report = res.content if hasattr(res, "content") else str(res)
+        return extract_text_content(raw_report)
+    except Exception as e:
+        return f"Error generating literature review: {str(e)}"
 
 
 def get_library_summary():
