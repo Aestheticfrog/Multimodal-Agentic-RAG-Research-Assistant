@@ -1,4 +1,4 @@
-"""ChromaDB Vector Store Management with Unified Zero-Crash Local Persistence & Full Context Injection."""
+"""ChromaDB Vector Store Management with Per-Source Metadata Filtered Retrieval (GitHub Gold-Standard Pattern)."""
 import os
 import uuid
 import logging
@@ -77,10 +77,7 @@ def clear_vector_store():
 
 
 def retrieve_adaptive_documents(query: str) -> List[Document]:
-    """Dynamically detects query intent and performs adaptive document retrieval.
-    - Comparative / Multi-paper queries -> Retrieves ALL stored document chunks across all uploaded PDFs directly from ChromaDB (full context injection).
-    - Targeted / Fact queries -> High-precision k=10 similarity search.
-    """
+    """Performs per-source metadata filtered retrieval for multi-paper comparison (GitHub LangChain pattern)."""
     vs = get_vector_store()
     if vs is None:
         return []
@@ -91,25 +88,33 @@ def retrieve_adaptive_documents(query: str) -> List[Document]:
     ]
     is_comparative = any(kw in query.lower() for kw in comp_keywords)
 
-    if is_comparative:
-        try:
-            # Fetch ALL documents directly from collection to guarantee 100% multi-paper coverage
-            data = vs._collection.get(include=["documents", "metadatas"])
-            documents_list = data.get("documents", [])
-            metadatas_list = data.get("metadatas", [])
-
-            all_docs = []
-            for text, meta in zip(documents_list, metadatas_list):
-                if text:
-                    all_docs.append(Document(page_content=text, metadata=meta or {}))
-
-            if all_docs:
-                logger.info(f"Comparative Full Context Injection: Retrieved ALL {len(all_docs)} stored chunks across collection.")
-                return all_docs
-        except Exception as e:
-            logger.warning(f"Error retrieving all documents for comparison: {e}. Falling back to similarity search.")
-
     try:
+        summary = get_indexed_sources_summary()
+        sources = list(summary.keys())
+
+        # If multiple papers are indexed and query is comparative, query EACH source PDF independently
+        if is_comparative and len(sources) >= 2:
+            combined_docs: List[Document] = []
+            for src in sources:
+                try:
+                    # Filtered search for exact paper source
+                    src_docs = vs.similarity_search(query, k=6, filter={"source": src})
+                    if src_docs:
+                        combined_docs.extend(src_docs)
+                    else:
+                        # Fallback: get top 6 chunks for this source directly
+                        raw_data = vs._collection.get(where={"source": src}, limit=6, include=["documents", "metadatas"])
+                        for txt, meta in zip(raw_data.get("documents", []), raw_data.get("metadatas", [])):
+                            if txt:
+                                combined_docs.append(Document(page_content=txt, metadata=meta or {}))
+                except Exception as e:
+                    logger.warning(f"Error querying source '{src}': {e}")
+            
+            if combined_docs:
+                logger.info(f"Per-Source Filtered Retrieval: Retracted {len(combined_docs)} balanced chunks across {len(sources)} sources: {sources}")
+                return combined_docs
+
+        # Fallback for single paper or non-comparative query: fetch all or top-k
         raw_docs = vs.similarity_search(query, k=10)
         return raw_docs if raw_docs else []
     except Exception as e:
