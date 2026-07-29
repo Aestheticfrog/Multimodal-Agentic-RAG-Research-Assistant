@@ -235,6 +235,7 @@ with st.sidebar:
         if should_process:
             # Clear stale data
             st.session_state["in_memory_docs"] = []
+            st.session_state["pdf_bytes_store"] = {}
             try:
                 from backend.app.retrievers.vector_store import clear_vector_store
                 clear_vector_store()
