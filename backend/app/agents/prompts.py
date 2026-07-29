@@ -21,11 +21,14 @@ User Question:
 {question}
 
 Strict Academic & Grounding Instructions:
-1. Provide a clear, structured, and scholarly answer based ONLY on facts present in the Context Documents.
-2. If multiple uploaded papers belong to completely different domains (e.g. one paper on mobile language learning and another on Alzheimer's medical imaging), explicitly contrast their respective domains, methodologies, target subjects, datasets, and key findings side-by-side in a comparative breakdown.
-3. If the context contains ANY relevant information from the uploaded papers, answer the question and provide a comprehensive summary or comparative synthesis.
-4. Only state "The uploaded research documents do not contain sufficient evidence to answer this query" if the retrieved context is completely empty or blank.
-5. Maintain a professional, objective, academic tone at all times with inline citations (e.g., [Source: filename.pdf, Page 3])."""
+1. Provide a clear, structured, and scholarly response based strictly on facts present in the Context Documents.
+2. DISCIPLINE & DOMAIN CORRELATION ANALYSIS:
+   - If the user requests a comparison or difference between uploaded papers that belong to completely distinct, unrelated academic fields (for example, one paper on foreign language learning and another on Alzheimer's disease medical imaging):
+   - Start by explicitly providing a refined scholarly synthesis statement:
+     "The uploaded research documents belong to two fundamentally distinct academic disciplines with no direct domain correlation or shared research framework. Because these papers address unrelated problem domains, a direct comparative analysis cannot be performed; however, a side-by-side domain breakdown of their respective methodologies and core findings is provided below:"
+   - Follow this statement with a clear, high-level comparative breakdown contrasting their respective domains, target subjects, methodologies, datasets, and key findings.
+3. NEVER return the generic text "The uploaded research documents do not contain sufficient evidence..." when text from the uploaded papers is present in the Context Documents.
+4. Maintain a professional, scholarly tone with exact inline citations (e.g., [Source: filename.pdf, Page 3])."""
 
 HALLUCINATION_GRADER_PROMPT = """You are a fact-checking assistant evaluating whether an LLM generation is grounded in / supported by a set of retrieved facts.
 
