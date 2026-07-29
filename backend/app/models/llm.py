@@ -90,7 +90,7 @@ def get_gemini_llm(model_name: str = "gemini-3.5-flash-lite", temperature: float
     return ResilientGeminiLLM(primary_model=model_name, temperature=temperature)
 
 
-def get_gemini_embeddings(model_name: str = "models/embedding-001"):
+def get_gemini_embeddings(model_name: str = "models/text-embedding-004"):
     """Initialize and return Google Gemini Embeddings."""
     api_key = os.getenv("GOOGLE_API_KEY")
     if not api_key:
