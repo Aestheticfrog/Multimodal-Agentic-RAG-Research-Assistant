@@ -19,16 +19,26 @@ logger = logging.getLogger("researchpilot.graph")
 
 
 def retrieve_docs_node(state: AgentState) -> AgentState:
-    """Retrieves documents from Vector Store with dynamic intent detection and source-stratification."""
-    logger.info("--- NODE: RETRIEVE DOCUMENTS (ADAPTIVE MODE) ---")
+    """Retrieves documents from Vector Store and merges with in-memory session docs."""
+    logger.info("--- NODE: RETRIEVE DOCUMENTS ---")
     question = state["question"]
-    
+    existing_docs = state.get("documents", [])
+
     from backend.app.retrievers.vector_store import retrieve_adaptive_documents
-    docs = retrieve_adaptive_documents(question)
+    vector_docs = retrieve_adaptive_documents(question)
+
+    combined = list(existing_docs) + list(vector_docs)
+    seen = set()
+    dedup_docs = []
+    for d in combined:
+        key = (d.metadata.get("source"), d.metadata.get("page"), d.page_content[:50])
+        if key not in seen:
+            seen.add(key)
+            dedup_docs.append(d)
 
     return {
         **state,
-        "documents": docs,
+        "documents": dedup_docs,
         "retry_count": state.get("retry_count", 0),
     }
 

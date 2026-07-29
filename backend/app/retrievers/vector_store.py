@@ -1,5 +1,6 @@
-"""ChromaDB Vector Store Management with Per-Source Metadata Filtered Retrieval (GitHub Gold-Standard Pattern)."""
+"""ChromaDB Vector Store Management with Hybrid Exact Keyword + Vector Retrieval."""
 import os
+import re
 import uuid
 import logging
 from pathlib import Path
@@ -77,46 +78,69 @@ def clear_vector_store():
 
 
 def retrieve_adaptive_documents(query: str) -> List[Document]:
-    """Performs per-source metadata filtered retrieval for multi-paper comparison (GitHub LangChain pattern)."""
+    """Performs hybrid exact keyword + vector retrieval for section/table references and multi-paper comparison."""
     vs = get_vector_store()
     if vs is None:
         return []
 
-    comp_keywords = [
-        "compare", "comparison", "difference", "between", "versus", "vs",
-        "both", "all papers", "literature review", "synthesis", "different", "two", "differnce", "papers"
-    ]
-    is_comparative = any(kw in query.lower() for kw in comp_keywords)
+    # Detect exact section/table/figure references (e.g., Section 4.3, Table 1, Figure 2)
+    sec_match = re.search(r"\b(section|table|figure|fig)\s*(\d+(\.\d+)?)\b", query, re.IGNORECASE)
 
     try:
         summary = get_indexed_sources_summary()
         sources = list(summary.keys())
 
-        # If multiple papers are indexed and query is comparative, query EACH source PDF independently
+        # Exact Keyword Match for specific sections/tables
+        kw_docs: List[Document] = []
+        if sec_match:
+            sec_target = sec_match.group(0).lower()
+            sec_num = sec_match.group(2)
+            raw_data = vs._collection.get(include=["documents", "metadatas"])
+            for txt, meta in zip(raw_data.get("documents", []), raw_data.get("metadatas", [])):
+                if txt and (sec_target in txt.lower() or f"{sec_num}." in txt or f"section {sec_num}" in txt.lower()):
+                    kw_docs.append(Document(page_content=txt, metadata=meta or {}))
+            if kw_docs:
+                logger.info(f"Exact Keyword Search found {len(kw_docs)} matching chunks for '{sec_target}'.")
+
+        comp_keywords = [
+            "compare", "comparison", "difference", "between", "versus", "vs",
+            "both", "all papers", "literature review", "synthesis", "different", "two", "differnce", "papers"
+        ]
+        is_comparative = any(kw in query.lower() for kw in comp_keywords)
+
+        # Multi-paper comparative retrieval per source
         if is_comparative and len(sources) >= 2:
-            combined_docs: List[Document] = []
+            combined_docs: List[Document] = list(kw_docs)
             for src in sources:
                 try:
-                    # Filtered search for exact paper source
                     src_docs = vs.similarity_search(query, k=6, filter={"source": src})
                     if src_docs:
                         combined_docs.extend(src_docs)
                     else:
-                        # Fallback: get top 6 chunks for this source directly
                         raw_data = vs._collection.get(where={"source": src}, limit=6, include=["documents", "metadatas"])
                         for txt, meta in zip(raw_data.get("documents", []), raw_data.get("metadatas", [])):
                             if txt:
                                 combined_docs.append(Document(page_content=txt, metadata=meta or {}))
                 except Exception as e:
                     logger.warning(f"Error querying source '{src}': {e}")
-            
+
             if combined_docs:
-                logger.info(f"Per-Source Filtered Retrieval: Retracted {len(combined_docs)} balanced chunks across {len(sources)} sources: {sources}")
                 return combined_docs
 
-        # Fallback for single paper or non-comparative query: fetch all or top-k
-        raw_docs = vs.similarity_search(query, k=10)
-        return raw_docs if raw_docs else []
+        # Standard similarity search (combining exact keyword matches + top 15 similarity matches)
+        sim_docs = vs.similarity_search(query, k=15)
+        all_results = kw_docs + sim_docs
+
+        # Deduplicate while preserving rank order
+        seen = set()
+        dedup_docs = []
+        for d in all_results:
+            key = (d.metadata.get("source"), d.metadata.get("page"), d.page_content[:50])
+            if key not in seen:
+                seen.add(key)
+                dedup_docs.append(d)
+
+        return dedup_docs if dedup_docs else sim_docs
     except Exception as e:
         logger.error(f"Error in document retrieval: {e}")
         return []

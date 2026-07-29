@@ -70,7 +70,18 @@ def process_pdf_upload(file):
         docs = parse_pdf_bytes(file.getvalue(), file.name)
         if not docs:
             return 0
-        return add_documents_to_vector_store(docs)
+
+        # Store in Streamlit session state in-memory store for 100% multi-paper session persistence
+        if "in_memory_docs" not in st.session_state:
+            st.session_state["in_memory_docs"] = []
+
+        st.session_state["in_memory_docs"] = [
+            d for d in st.session_state["in_memory_docs"]
+            if d.metadata.get("source") != file.name
+        ] + docs
+
+        add_documents_to_vector_store(docs)
+        return len(docs)
     except Exception as e:
         st.error(f"Failed to parse '{file.name}': {e}")
         return 0
@@ -99,10 +110,11 @@ def execute_agent_query(prompt_text):
     except Exception:
         # Standalone direct fallback (Streamlit Cloud zero-backend mode)
         from backend.app.agents.graph import researchpilot_agent
+        session_docs = st.session_state.get("in_memory_docs", [])
         initial_state = {
             "question": prompt_text,
             "original_question": prompt_text,
-            "documents": [],
+            "documents": session_docs,
             "generation": "",
             "web_search_needed": False,
             "hallucination_grade": "",
