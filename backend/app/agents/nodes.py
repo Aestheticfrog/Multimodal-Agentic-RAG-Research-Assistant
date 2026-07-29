@@ -152,6 +152,16 @@ def transform_query_node(state: AgentState) -> AgentState:
     question = state["question"]
     retry_count = state.get("retry_count", 0)
 
+    from backend.app.utils.security import moderate_query
+    is_safe, _ = moderate_query(question)
+    if not is_safe:
+        logger.info("Query rewriter skipped for guarded query.")
+        return {
+            **state,
+            "question": question,
+            "retry_count": retry_count + 1,
+        }
+
     llm = get_gemini_llm(temperature=0.4)
     prompt = ChatPromptTemplate.from_template(QUERY_REWRITER_PROMPT)
     formatted_prompt = prompt.format(question=question)
