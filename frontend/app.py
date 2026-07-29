@@ -62,14 +62,21 @@ def process_pdf_upload(file):
     from backend.app.utils.pdf_parser import parse_pdf_bytes
     from backend.app.retrievers.vector_store import add_documents_to_vector_store
 
-    docs = parse_pdf_bytes(file.getvalue(), file.name)
+    pdf_bytes = file.getvalue()
+    docs = parse_pdf_bytes(pdf_bytes, file.name)
     if not docs:
         return 0
 
-    # Store raw parsed docs in session state — this is the AUTHORITATIVE source of truth
+    # Store RAW PDF BYTES in session state — the MOST bulletproof source of truth.
+    # Document objects may fail to serialize across Streamlit reruns.
+    # Raw bytes are just bytes — they ALWAYS serialize correctly.
+    if "pdf_bytes_store" not in st.session_state:
+        st.session_state["pdf_bytes_store"] = {}
+    st.session_state["pdf_bytes_store"][file.name] = pdf_bytes
+
+    # Also store parsed docs (belt AND suspenders)
     if "in_memory_docs" not in st.session_state:
         st.session_state["in_memory_docs"] = []
-    # Remove old chunks from same file, then append new
     st.session_state["in_memory_docs"] = [
         d for d in st.session_state["in_memory_docs"]
         if d.metadata.get("source") != file.name
@@ -85,7 +92,7 @@ def process_pdf_upload(file):
 
 
 # ═══════════════════════════════════════════════════════════
-# Helper: Execute agent query using session docs as ground truth
+# Helper: Execute agent query — re-parses PDFs from raw bytes every time
 # ═══════════════════════════════════════════════════════════
 def execute_agent_query(prompt_text):
     from backend.app.utils.security import moderate_query
@@ -112,14 +119,29 @@ def execute_agent_query(prompt_text):
         except Exception:
             pass
 
-    # Standalone direct execution (Streamlit Cloud)
+    # ── Bulletproof document reconstruction from raw PDF bytes ──
+    # This re-parses from stored bytes on EVERY query.
+    # Raw bytes in session state are guaranteed to survive Streamlit reruns.
+    from backend.app.utils.pdf_parser import parse_pdf_bytes
     from backend.app.agents.graph import researchpilot_agent
-    session_docs = list(st.session_state.get("in_memory_docs", []))
+
+    fresh_docs = []
+    pdf_store = st.session_state.get("pdf_bytes_store", {})
+    for filename, pdf_bytes in pdf_store.items():
+        try:
+            parsed = parse_pdf_bytes(pdf_bytes, filename)
+            fresh_docs.extend(parsed)
+        except Exception:
+            pass
+
+    # Fallback to in_memory_docs if pdf_bytes_store is empty
+    if not fresh_docs:
+        fresh_docs = list(st.session_state.get("in_memory_docs", []))
 
     initial_state = {
         "question": prompt_text,
         "original_question": prompt_text,
-        "documents": session_docs,
+        "documents": fresh_docs,
         "generation": "",
         "web_search_needed": False,
         "hallucination_grade": "",
