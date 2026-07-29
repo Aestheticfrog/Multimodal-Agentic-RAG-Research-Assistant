@@ -19,42 +19,37 @@ st.set_page_config(
 
 BACKEND_URL = os.getenv("BACKEND_URL", "http://localhost:8000")
 
-# Session State for Analytics & Chat
-if "messages" not in st.session_state:
-    st.session_state.messages = []
-if "query_count" not in st.session_state:
-    st.session_state.query_count = 0
-if "chunks_indexed" not in st.session_state:
-    st.session_state.chunks_indexed = 0
-if "review_count" not in st.session_state:
-    st.session_state.review_count = 0
+# ─── Fast Backend Availability Check (once per session) ───
+def _is_backend_online():
+    if "backend_online" not in st.session_state:
+        try:
+            res = httpx.get(f"{BACKEND_URL}/", timeout=0.5)
+            st.session_state["backend_online"] = (res.status_code == 200)
+        except Exception:
+            st.session_state["backend_online"] = False
+    return st.session_state["backend_online"]
 
-# Styling
+IS_BACKEND_ONLINE = _is_backend_online()
+
+# ─── Persist Dir for ChromaDB ───
+PERSIST_DIR_ABS = str(root_dir / "database" / "chroma_store")
+
+# Custom CSS styling
 st.markdown("""
 <style>
-    .main-header { font-size: 2.3rem; font-weight: 700; color: #4A90E2; }
-    .sub-caption { font-size: 1.05rem; color: #888888; margin-bottom: 20px; }
-    .stTabs [data-baseweb="tab-list"] { gap: 12px; }
-    .stTabs [data-baseweb="tab"] { height: 45px; border-radius: 6px; padding: 0 20px; }
-    .citation-card { background-color: #1E222A; padding: 12px; border-radius: 8px; border-left: 4px solid #4A90E2; margin-bottom: 8px; }
-    .metric-box { background-color: #1A1D24; padding: 15px; border-radius: 8px; text-align: center; border: 1px solid #2E3440; }
+.main-title {font-size: 2.5rem; font-weight: 800; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; text-align: center; padding: 0.5rem 0;}
+.sub-caption {font-size: 1rem; color: #888; text-align: center; margin-bottom: 1.5rem;}
 </style>
 """, unsafe_allow_html=True)
-
-st.markdown('<div class="main-header">🔬 Agentic Multimodal RAG Engine</div>', unsafe_allow_html=True)
+st.markdown('<div class="main-title">🔬 ResearchPilot AI</div>', unsafe_allow_html=True)
 st.markdown('<div class="sub-caption">Self-Correcting Research Assistant powered by <b>LangGraph</b>, <b>Google Gemini</b> & <b>ChromaDB</b></div>', unsafe_allow_html=True)
 
-# Helper function for PDF parsing in standalone or API mode
-def process_pdf_upload(file):
-    is_api_online = False
-    try:
-        res = httpx.get(f"{BACKEND_URL}/", timeout=0.5)
-        if res.status_code == 200:
-            is_api_online = True
-    except Exception:
-        is_api_online = False
 
-    if is_api_online:
+# ═══════════════════════════════════════════════════════════
+# Helper: Parse & store PDF in BOTH session state and ChromaDB
+# ═══════════════════════════════════════════════════════════
+def process_pdf_upload(file):
+    if IS_BACKEND_ONLINE:
         try:
             files = {"file": (file.name, file.getvalue(), "application/pdf")}
             response = httpx.post(f"{BACKEND_URL}/api/v1/upload", files=files, timeout=30.0)
@@ -63,30 +58,35 @@ def process_pdf_upload(file):
         except Exception:
             pass
 
-    # Fast direct standalone mode for Streamlit Cloud (0ms delay)
-    try:
-        from backend.app.utils.pdf_parser import parse_pdf_bytes
-        from backend.app.retrievers.vector_store import add_documents_to_vector_store
-        docs = parse_pdf_bytes(file.getvalue(), file.name)
-        if not docs:
-            return 0
+    # Direct standalone mode (Streamlit Cloud)
+    from backend.app.utils.pdf_parser import parse_pdf_bytes
+    from backend.app.retrievers.vector_store import add_documents_to_vector_store
 
-        # Store in Streamlit session state in-memory store for 100% multi-paper session persistence
-        if "in_memory_docs" not in st.session_state:
-            st.session_state["in_memory_docs"] = []
-
-        st.session_state["in_memory_docs"] = [
-            d for d in st.session_state["in_memory_docs"]
-            if d.metadata.get("source") != file.name
-        ] + docs
-
-        add_documents_to_vector_store(docs)
-        return len(docs)
-    except Exception as e:
-        st.error(f"Failed to parse '{file.name}': {e}")
+    docs = parse_pdf_bytes(file.getvalue(), file.name)
+    if not docs:
         return 0
 
+    # Store raw parsed docs in session state — this is the AUTHORITATIVE source of truth
+    if "in_memory_docs" not in st.session_state:
+        st.session_state["in_memory_docs"] = []
+    # Remove old chunks from same file, then append new
+    st.session_state["in_memory_docs"] = [
+        d for d in st.session_state["in_memory_docs"]
+        if d.metadata.get("source") != file.name
+    ] + docs
 
+    # Also store in ChromaDB (best-effort, not required)
+    try:
+        add_documents_to_vector_store(docs)
+    except Exception:
+        pass
+
+    return len(docs)
+
+
+# ═══════════════════════════════════════════════════════════
+# Helper: Execute agent query using session docs as ground truth
+# ═══════════════════════════════════════════════════════════
 def execute_agent_query(prompt_text):
     from backend.app.utils.security import moderate_query
     is_safe, refusal_reason = moderate_query(prompt_text)
@@ -96,86 +96,69 @@ def execute_agent_query(prompt_text):
             "original_question": prompt_text,
             "generation": refusal_reason,
             "citations": [],
+            "sources": [],
             "retry_count": 0,
         }
 
-    try:
-        response = httpx.post(
-            f"{BACKEND_URL}/api/v1/query",
-            json={"question": prompt_text},
-            timeout=300.0,
-        )
-        if response.status_code == 200:
-            return response.json()
-    except Exception:
-        # Standalone direct fallback (Streamlit Cloud zero-backend mode)
-        from backend.app.agents.graph import researchpilot_agent
-        session_docs = st.session_state.get("in_memory_docs", [])
-        initial_state = {
-            "question": prompt_text,
-            "original_question": prompt_text,
-            "documents": session_docs,
-            "generation": "",
-            "web_search_needed": False,
-            "hallucination_grade": "",
-            "answer_grade": "",
-            "retry_count": 0,
-            "citations": [],
-        }
-        res = researchpilot_agent.invoke(initial_state)
-        citations = res.get("citations", [])
-        unique_sources = sorted(list(set([c.get("source") for c in citations if c.get("source")])))
-        return {
-            "question": res.get("question", prompt_text),
-            "original_question": prompt_text,
-            "generation": res.get("generation", ""),
-            "citations": citations,
-            "sources": unique_sources,
-            "retry_count": res.get("retry_count", 0),
-        }
+    if IS_BACKEND_ONLINE:
+        try:
+            response = httpx.post(
+                f"{BACKEND_URL}/api/v1/query",
+                json={"question": prompt_text},
+                timeout=60.0,
+            )
+            if response.status_code == 200:
+                return response.json()
+        except Exception:
+            pass
+
+    # Standalone direct execution (Streamlit Cloud)
+    from backend.app.agents.graph import researchpilot_agent
+    session_docs = list(st.session_state.get("in_memory_docs", []))
+
+    initial_state = {
+        "question": prompt_text,
+        "original_question": prompt_text,
+        "documents": session_docs,
+        "generation": "",
+        "web_search_needed": False,
+        "hallucination_grade": "",
+        "answer_grade": "",
+        "retry_count": 0,
+        "citations": [],
+    }
+    res = researchpilot_agent.invoke(initial_state)
+    citations = res.get("citations", [])
+    unique_sources = sorted(list(set([c.get("source") for c in citations if c.get("source")])))
+    return {
+        "question": res.get("question", prompt_text),
+        "original_question": prompt_text,
+        "generation": res.get("generation", ""),
+        "citations": citations,
+        "sources": unique_sources,
+        "retry_count": res.get("retry_count", 0),
+    }
 
 
 def execute_literature_review(topic_text):
-    try:
-        res = httpx.post(
-            f"{BACKEND_URL}/api/v1/literature-review",
-            json={"topic": topic_text},
-            timeout=300.0,
-        )
-        if res.status_code == 200:
-            return res.json()
-    except Exception:
-        from backend.app.retrievers.vector_store import get_retriever
-        from backend.app.models.llm import get_gemini_llm
-        from backend.app.agents.nodes import extract_text_content
-        retriever = get_retriever(k=8)
-        context_docs = retriever.invoke(topic_text) if retriever else []
-        formatted_context = "\n---\n".join([d.page_content for d in context_docs]) if context_docs else "No specific documents indexed yet."
-        llm = get_gemini_llm(temperature=0.3)
-        prompt = f"Write a Literature Review Synthesis Report on: '{topic_text}'.\n\nContext:\n{formatted_context}"
-        raw = llm.invoke(prompt)
-        report = extract_text_content(raw.content if hasattr(raw, "content") else str(raw))
-        paragraphs = report.strip().split("\n\n")
-        summary = "\n\n".join(paragraphs[:2]) if len(paragraphs) >= 2 else report[:300]
-        return {"topic": topic_text, "executive_summary": summary, "full_report": report}
-
-
-PERSIST_DIR_ABS = str(Path(__file__).resolve().parent.parent / "database" / "chroma_store")
+    if IS_BACKEND_ONLINE:
+        try:
+            res = httpx.post(
+                f"{BACKEND_URL}/api/v1/literature-review",
+                json={"topic": topic_text},
+                timeout=300.0,
+            )
+            if res.status_code == 200:
+                return res.json().get("review", "")
+        except Exception:
+            pass
+    return "Literature review generation requires the FastAPI backend. Please run the backend locally or deploy it."
 
 
 def get_library_summary():
     try:
-        import chromadb
-        client = chromadb.PersistentClient(path=PERSIST_DIR_ABS)
-        collection = client.get_or_create_collection(name="unified_research_papers")
-        data = collection.get(include=["metadatas"])
-        metadatas = data.get("metadatas", [])
-        counts = {}
-        for m in metadatas:
-            if m and "source" in m:
-                src = str(m["source"])
-                counts[src] = counts.get(src, 0) + 1
-        return counts
+        from backend.app.retrievers.vector_store import get_indexed_sources_summary
+        return get_indexed_sources_summary()
     except Exception:
         return {}
 
@@ -189,17 +172,23 @@ def reset_library():
         pass
 
 
+# ═══════════════════════════════════════════════════════════
 # Sidebar Setup
+# ═══════════════════════════════════════════════════════════
 with st.sidebar:
     st.header("⚙️ System Status")
-    try:
-        res = httpx.get(f"{BACKEND_URL}/", timeout=2.0)
-        if res.status_code == 200:
-            st.success("🟢 REST API Backend: Online")
-        else:
-            st.warning("🟡 REST API Backend: Degraded")
-    except Exception:
+    if IS_BACKEND_ONLINE:
+        st.success("🟢 REST API Backend: Online")
+    else:
         st.info("⚡ Mode: Standalone Direct Agent Engine (Streamlit Cloud Active)")
+
+    # Show session document count
+    mem_docs = st.session_state.get("in_memory_docs", [])
+    if mem_docs:
+        mem_sources = set(d.metadata.get("source") for d in mem_docs)
+        st.success(f"📄 **{len(mem_docs)} chunks** from **{len(mem_sources)} paper(s)** in memory")
+    else:
+        st.warning("📄 No papers in memory. Upload PDFs below.")
 
     st.divider()
     st.header("📚 Paper Ingestion")
@@ -222,6 +211,7 @@ with st.sidebar:
         should_process = (current_file_names != last_file_names) or process_clicked
 
         if should_process:
+            # Clear stale data
             st.session_state["in_memory_docs"] = []
             try:
                 from backend.app.retrievers.vector_store import clear_vector_store
@@ -243,7 +233,18 @@ with st.sidebar:
             st.session_state["last_uploaded_names"] = current_file_names
             st.success(f"Indexed {total_added} total chunks across {len(uploaded_files)} paper(s) successfully!")
 
+
+# Initialize session defaults
+if "messages" not in st.session_state:
+    st.session_state.messages = []
+if "chunks_indexed" not in st.session_state:
+    st.session_state.chunks_indexed = 0
+if "query_count" not in st.session_state:
+    st.session_state.query_count = 0
+
+# ═══════════════════════════════════════════════════════════
 # Tabs
+# ═══════════════════════════════════════════════════════════
 tab_chat, tab_lit_review, tab_metrics = st.tabs(["💬 Agent Research Chat", "📝 Literature Review Generator", "📊 Live Resume Metrics & Architecture"])
 
 with tab_chat:
@@ -299,64 +300,80 @@ with tab_chat:
                         }
 
                     st.session_state.messages.append(msg_data)
-                    st.session_state["latest_citations"] = citations
-
-            st.rerun()
+                    st.rerun()
 
     with col_citations:
-        st.subheader("🏷️ Citation Breakdown")
-        latest_citations = st.session_state.get("latest_citations", [])
-        if latest_citations:
-            for cit in latest_citations:
-                st.markdown(f"""
-                <div class="citation-card">
-                    <b>Citation [{cit.get('id')}]</b><br/>
-                    📄 <i>Source:</i> {cit.get('source')}<br/>
-                    📌 <i>Page Reference:</i> {cit.get('page')}
-                </div>
-                """, unsafe_allow_html=True)
+        st.subheader("📎 Source Context & Citations")
+        if st.session_state.messages:
+            last_assistant = [m for m in st.session_state.messages if m["role"] == "assistant"]
+            if last_assistant:
+                info = last_assistant[-1].get("execution_info", {})
+                sources_list = info.get("sources", [])
+                if sources_list:
+                    for s in sources_list:
+                        st.markdown(f"- 📄 **{s}**")
+                else:
+                    st.info("No citations available for last response.")
         else:
-            st.info("No citations active yet. Ask a question to see source groundings.")
+            st.info("Ask a question to see citations here.")
+
 
 with tab_lit_review:
     st.subheader("📝 Automated Literature Review Generator")
-    topic_input = st.text_input(
-        "Literature Review Topic / Research Area:",
-        value="Agentic RAG, Self-Correction, and Adaptive Query Routing in Modern LLM Systems"
-    )
+    topic = st.text_input("Enter a research topic to generate a literature review:")
+    if st.button("Generate Literature Review"):
+        if topic:
+            with st.spinner("Generating comprehensive literature review..."):
+                review = execute_literature_review(topic)
+                st.markdown(review)
+        else:
+            st.warning("Please enter a research topic first.")
 
-    if st.button("🚀 Generate Literature Review Report"):
-        with st.spinner("Synthesizing theoretical foundations, methodologies, and open gaps..."):
-            review_data = execute_literature_review(topic_input)
-            if review_data:
-                st.session_state.review_count += 1
-                st.success("Literature Review Generated Successfully!")
-                st.markdown("### Executive Summary")
-                st.info(review_data["executive_summary"])
-                st.markdown("---")
-                st.markdown(review_data["full_report"])
 
 with tab_metrics:
-    st.subheader("📊 Live Resume Performance Metrics")
-    st.caption("Real-time usage analytics to feature directly on your resume:")
+    st.subheader("📊 Live Resume Metrics & Architecture")
+    col_m1, col_m2, col_m3, col_m4 = st.columns(4)
+    mem_docs_count = len(st.session_state.get("in_memory_docs", []))
+    mem_sources_count = len(set(d.metadata.get("source") for d in st.session_state.get("in_memory_docs", [])))
+    col_m1.metric("PDF Chunks in Memory", mem_docs_count)
+    col_m2.metric("Papers in Memory", mem_sources_count)
+    col_m3.metric("Agent Queries Executed", st.session_state.query_count)
+    col_m4.metric("Backend Mode", "API" if IS_BACKEND_ONLINE else "Standalone")
 
-    m1, m2, m3, m4 = st.columns(4)
-    m1.metric("Queries Executed", st.session_state.query_count)
-    m2.metric("PDF Chunks Indexed", st.session_state.chunks_indexed)
-    m3.metric("Reviews Generated", st.session_state.review_count)
-    m4.metric("Citation Precision", "98.4%")
-
-    st.markdown("---")
-    st.subheader("🏗️ Resume Technical Highlight Summary")
+    st.divider()
+    st.markdown("### 🏗️ System Architecture")
     st.markdown("""
-    ```text
-    Project: Agentic Multimodal RAG Engine (Research Pilot AI)
-    Tech Stack: LangGraph, LangChain, Google Gemini, ChromaDB, FastAPI, Streamlit, PyMuPDF
-    
-    Key Achievements for Resume:
-    - Designed cyclic state machine with LangGraph for Self-RAG & Adaptive RAG query optimization.
-    - Built zero-dependency PyMuPDF chunking pipeline & ChromaDB vector persistence store.
-    - Implemented a Resilient LLM failover pool handling API rate limits with 100% uptime.
-    - Built dual deployment architecture supporting both FastAPI REST API and Streamlit Cloud.
+    ```
+    ┌─────────────┐     ┌──────────────────┐     ┌───────────────┐
+    │  Streamlit   │────▶│  LangGraph Agent │────▶│  Google Gemini│
+    │  Frontend    │     │  State Machine   │     │  LLM Pool     │
+    └─────────────┘     └────────┬─────────┘     └───────────────┘
+                                 │
+                    ┌────────────┼────────────┐
+                    │            │            │
+              ┌─────▼─────┐ ┌───▼───┐ ┌──────▼──────┐
+              │  Retrieve  │ │ Grade │ │  Generate   │
+              │  Documents │ │ Docs  │ │  Answer     │
+              └─────┬──────┘ └───────┘ └─────────────┘
+                    │
+              ┌─────▼──────┐
+              │  ChromaDB   │
+              │  + Session  │
+              │  Memory     │
+              └─────────────┘
     ```
     """)
+
+    st.divider()
+    st.markdown("### 📋 In-Memory Document Details")
+    mem_docs_detail = st.session_state.get("in_memory_docs", [])
+    if mem_docs_detail:
+        source_page_map = {}
+        for d in mem_docs_detail:
+            src = d.metadata.get("source", "Unknown")
+            page = d.metadata.get("page", "?")
+            source_page_map.setdefault(src, []).append(page)
+        for src, pages in source_page_map.items():
+            st.markdown(f"**{src}**: {len(pages)} chunks across pages {sorted(set(pages))}")
+    else:
+        st.info("No papers in memory. Upload PDFs in the sidebar.")
