@@ -156,6 +156,28 @@ with st.sidebar:
                     count = process_pdf_upload(file)
                     st.session_state.chunks_indexed += count
                     st.success(f"Indexed {count} chunks successfully!")
+                    st.rerun()
+
+    st.divider()
+    st.header("📋 Active Paper Library")
+    try:
+        from backend.app.retrievers.vector_store import get_indexed_sources_summary, clear_vector_store
+        sources_summary = get_indexed_sources_summary()
+        if sources_summary:
+            total_c = sum(sources_summary.values())
+            st.caption(f"Indexed Context: {total_c} chunks across {len(sources_summary)} paper(s)")
+            for src_file, count in sources_summary.items():
+                st.markdown(f"📄 **{src_file}** (`{count} chunks`)")
+
+            if st.button("🗑️ Reset Vector Library", use_container_width=True):
+                clear_vector_store()
+                st.session_state.chunks_indexed = 0
+                st.success("Vector library reset successfully!")
+                st.rerun()
+        else:
+            st.info("No research papers currently stored in ChromaDB. Upload a PDF above!")
+    except Exception as e:
+        st.caption(f"Library status: {e}")
 
 # Tabs
 tab_chat, tab_lit_review, tab_metrics = st.tabs(["💬 Agent Research Chat", "📝 Literature Review Generator", "📊 Live Resume Metrics & Architecture"])

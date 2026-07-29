@@ -1,5 +1,6 @@
-"""ChromaDB Vector Store Management with Unified Zero-Crash Local Persistence."""
+"""ChromaDB Vector Store Management with Unified Zero-Crash Local Persistence & Library Inspector."""
 import os
+import uuid
 import logging
 from typing import List, Optional, Dict
 
@@ -18,7 +19,6 @@ def get_vector_store() -> Chroma:
     global _vector_store_instance
     if _vector_store_instance is None:
         os.makedirs(PERSIST_DIR, exist_ok=True)
-        # Using Chroma's native ONNX default embeddings to guarantee 100% collection unity across all paper uploads
         _vector_store_instance = Chroma(
             persist_directory=PERSIST_DIR,
             collection_name="unified_research_papers",
@@ -29,15 +29,49 @@ def get_vector_store() -> Chroma:
 
 
 def add_documents_to_vector_store(documents: List[Document]) -> int:
-    """Ingests list of LangChain Document objects into ChromaDB unified store."""
+    """Ingests list of LangChain Document objects into ChromaDB unified store with unique IDs."""
     vs = get_vector_store()
     try:
-        vs.add_documents(documents)
+        ids = [
+            f"{doc.metadata.get('source', 'paper')}_p{doc.metadata.get('page', 1)}_{i}_{uuid.uuid4().hex[:6]}"
+            for i, doc in enumerate(documents)
+        ]
+        vs.add_documents(documents, ids=ids)
         logger.info(f"Successfully added {len(documents)} document chunks to unified ChromaDB.")
         return len(documents)
     except Exception as e:
         logger.error(f"Error adding documents to ChromaDB: {e}")
         return len(documents)
+
+
+def get_indexed_sources_summary() -> Dict[str, int]:
+    """Inspects ChromaDB and returns a dict mapping source filenames to chunk counts."""
+    vs = get_vector_store()
+    try:
+        data = vs._collection.get(include=["metadatas"])
+        metadatas = data.get("metadatas", [])
+        counts: Dict[str, int] = {}
+        for m in metadatas:
+            if m and "source" in m:
+                src = str(m["source"])
+                counts[src] = counts.get(src, 0) + 1
+        return counts
+    except Exception as e:
+        logger.error(f"Error getting indexed sources summary: {e}")
+        return {}
+
+
+def clear_vector_store():
+    """Resets the ChromaDB collection completely."""
+    global _vector_store_instance
+    try:
+        vs = get_vector_store()
+        vs.delete_collection()
+        _vector_store_instance = None
+        logger.info("ChromaDB vector store cleared.")
+    except Exception as e:
+        logger.error(f"Error clearing vector store: {e}")
+        _vector_store_instance = None
 
 
 def retrieve_adaptive_documents(query: str) -> List[Document]:
