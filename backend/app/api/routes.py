@@ -78,6 +78,17 @@ async def upload_document(file: UploadFile = File(...)):
 async def run_query(request: QueryRequest):
     """Executes the Agentic RAG state graph (LangGraph) for a user question."""
     try:
+        from backend.app.utils.security import moderate_query
+        is_safe, refusal_reason = moderate_query(request.question)
+        if not is_safe:
+            return QueryResponse(
+                question=request.question,
+                original_question=request.question,
+                generation=refusal_reason,
+                citations=[],
+                retry_count=0,
+            )
+
         initial_state = {
             "question": request.question,
             "original_question": request.question,

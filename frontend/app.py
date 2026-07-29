@@ -60,6 +60,17 @@ def process_pdf_upload(file):
 
 
 def execute_agent_query(prompt_text):
+    from backend.app.utils.security import moderate_query
+    is_safe, refusal_reason = moderate_query(prompt_text)
+    if not is_safe:
+        return {
+            "question": prompt_text,
+            "original_question": prompt_text,
+            "generation": refusal_reason,
+            "citations": [],
+            "retry_count": 0,
+        }
+
     try:
         response = httpx.post(
             f"{BACKEND_URL}/api/v1/query",

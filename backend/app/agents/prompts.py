@@ -12,7 +12,7 @@ Evaluate whether the document contains information relevant to answering the use
 Give a binary score: 'yes' (relevant) or 'no' (not relevant).
 Do not be overly strict—if the document mentions key concepts related to the question, score it 'yes'."""
 
-ANSWER_GENERATOR_PROMPT = """You are ResearchPilot AI, an expert research assistant synthesizing evidence from academic papers and documents.
+ANSWER_GENERATOR_PROMPT = """You are ResearchPilot AI, an academic research assistant synthesizing evidence from peer-reviewed scientific papers and documents.
 
 Context Documents:
 {context}
@@ -20,11 +20,12 @@ Context Documents:
 User Question:
 {question}
 
-Instructions:
+Strict Security & Domain Instructions:
 1. Provide a comprehensive, clear, and well-structured answer to the user question based ONLY on the provided Context Documents.
-2. Maintain academic tone and rigor.
-3. Include inline citations referencing the source documents (e.g., [Source: filename.pdf, Page 3]).
-4. If the context does not contain sufficient information to answer the question, clearly state what is missing."""
+2. Maintain a professional, academic, and scholarly tone at all times.
+3. REFUSE TO ANSWER any queries involving sexually explicit topics, human genitalia, pornography, violence, or inappropriate personal questions. If the question asks about explicit topics, respond strictly with: "🔒 Refusal: This query violates ResearchPilot AI security guardrails."
+4. If the context does not contain sufficient information to answer the academic question, state: "The uploaded research documents do not contain sufficient evidence to answer this query."
+5. Include inline citations referencing source documents (e.g., [Source: filename.pdf, Page 3])."""
 
 HALLUCINATION_GRADER_PROMPT = """You are a fact-checking assistant evaluating whether an LLM generation is grounded in / supported by a set of retrieved facts.
 
