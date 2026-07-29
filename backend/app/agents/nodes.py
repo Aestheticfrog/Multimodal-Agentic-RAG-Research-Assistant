@@ -74,7 +74,7 @@ def grade_documents_node(state: AgentState) -> AgentState:
 
 def generate_answer_node(state: AgentState) -> AgentState:
     """Synthesizes answer from relevant documents using Gemini LLM.
-    Automatically switches to FIGURE_ANALYZER_PROMPT if the user asks specifically about figures, graphs, or charts.
+    Automatically prioritizes target section chunks (Section 4.3, Table 1) to the top of LLM context.
     """
     logger.info("--- NODE: GENERATE ANSWER ---")
     question = state.get("original_question", state["question"])
@@ -82,10 +82,27 @@ def generate_answer_node(state: AgentState) -> AgentState:
 
     llm = get_gemini_llm(temperature=0.2)
 
+    import re
+    sec_match = re.search(r"\b(section|table|figure|fig)\s*(\d+(\.\d+)?)\b", question, re.IGNORECASE)
+
+    def rank_doc(d):
+        content = d.page_content.lower()
+        score = 0
+        if sec_match:
+            sec_str = sec_match.group(0).lower()
+            sec_num = sec_match.group(2)
+            if sec_str in content or f"{sec_num}." in content or f"section {sec_num}" in content:
+                score += 100
+        return score
+
+    # Prioritize exact target section chunks to top of context
+    sorted_docs = sorted(documents, key=rank_doc, reverse=True)
+    sorted_docs = sorted_docs[:20]
+
     # Format context with citations metadata
     formatted_context_list = []
     citations = []
-    for idx, doc in enumerate(documents, start=1):
+    for idx, doc in enumerate(sorted_docs, start=1):
         source = doc.metadata.get("source", f"Document {idx}")
         page = doc.metadata.get("page", "N/A")
         has_img = " (Contains Visual Figures/Tables)" if doc.metadata.get("has_images") else ""
