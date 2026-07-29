@@ -193,23 +193,6 @@ with st.sidebar:
             st.session_state.chunks_indexed += total_added
             st.success(f"Indexed {total_added} total chunks across {len(uploaded_files)} paper(s) successfully!")
 
-    st.divider()
-    st.header("📋 Active Paper Library")
-    sources_summary = get_library_summary()
-    if sources_summary:
-        total_c = sum(sources_summary.values())
-        st.caption(f"Indexed Context: {total_c} chunks across {len(sources_summary)} paper(s)")
-        for src_file, count in sources_summary.items():
-            st.markdown(f"📄 **{src_file}** (`{count} chunks`)")
-
-        if st.button("🗑️ Reset Vector Library", use_container_width=True):
-            reset_library()
-            st.session_state.chunks_indexed = 0
-            st.success("Vector library reset successfully!")
-            st.rerun()
-    else:
-        st.info("No research papers currently stored in ChromaDB. Upload a PDF above!")
-
 # Tabs
 tab_chat, tab_lit_review, tab_metrics = st.tabs(["💬 Agent Research Chat", "📝 Literature Review Generator", "📊 Live Resume Metrics & Architecture"])
 
