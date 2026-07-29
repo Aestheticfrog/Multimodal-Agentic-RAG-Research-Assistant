@@ -168,38 +168,49 @@ with tab_chat:
         for message in st.session_state.messages:
             with st.chat_message(message["role"]):
                 st.markdown(message["content"])
+                if "execution_info" in message:
+                    info = message["execution_info"]
+                    retry_count = info.get("retry_count", 0)
+                    final_q = info.get("final_question", "")
+                    orig_q = info.get("orig_question", "")
+                    with st.expander("🔍 LangGraph Agent Execution Info", expanded=(retry_count > 0)):
+                        if retry_count > 0 or (final_q and final_q.strip() != orig_q.strip()):
+                            st.warning(f"🔄 **Query Autocorrected / Transformed** ({retry_count} transformation loops)")
+                            st.markdown(f"**Original Prompt:** `{orig_q}`")
+                            st.markdown(f"**Optimized Query:** `{final_q}`")
+                        else:
+                            st.success("⚡ **Direct Match**: Retrieved relevant context on the first pass without needing query rewrite.")
+                            st.markdown(f"**Executed Query:** `{orig_q}`")
 
         if prompt := st.chat_input("Ask a question about your uploaded research papers..."):
             st.session_state.messages.append({"role": "user", "content": prompt})
-            with st.chat_message("user"):
-                st.markdown(prompt)
 
-            with st.chat_message("assistant"):
-                with st.spinner("LangGraph agent analyzing context, grading relevance & checking hallucinations..."):
-                    data = execute_agent_query(prompt)
-                    if data:
-                        st.session_state.query_count += 1
-                        answer = data["generation"]
-                        citations = data.get("citations", [])
-                        retry_count = data.get("retry_count", 0)
+            with st.spinner("LangGraph agent analyzing context, grading relevance & checking hallucinations..."):
+                data = execute_agent_query(prompt)
+                if data:
+                    st.session_state.query_count += 1
+                    answer = data["generation"]
+                    citations = data.get("citations", [])
+                    retry_count = data.get("retry_count", 0)
+                    final_question = data.get("question")
+                    orig_question = data.get("original_question", prompt)
 
-                        st.markdown(answer)
-                        final_question = data.get("question")
-                        orig_question = data.get("original_question", prompt)
-                        is_guarded = "🔒 Security Guardrail" in answer
+                    msg_data = {
+                        "role": "assistant",
+                        "content": answer,
+                    }
 
-                        if not is_guarded:
-                            with st.expander("🔍 LangGraph Agent Execution Info", expanded=(retry_count > 0)):
-                                if retry_count > 0 or (final_question and final_question.strip() != orig_question.strip()):
-                                    st.warning(f"🔄 **Query Autocorrected / Transformed** ({retry_count} transformation loops)")
-                                    st.markdown(f"**Original Prompt:** `{orig_question}`")
-                                    st.markdown(f"**Optimized Query:** `{final_question}`")
-                                else:
-                                    st.success("⚡ **Direct Match**: Retrieved relevant context on the first pass without needing query rewrite.")
-                                    st.markdown(f"**Executed Query:** `{orig_question}`")
+                    if "🔒 Security Guardrail" not in answer:
+                        msg_data["execution_info"] = {
+                            "retry_count": retry_count,
+                            "final_question": final_question,
+                            "orig_question": orig_question,
+                        }
 
-                        st.session_state.messages.append({"role": "assistant", "content": answer})
-                        st.session_state["latest_citations"] = citations
+                    st.session_state.messages.append(msg_data)
+                    st.session_state["latest_citations"] = citations
+
+            st.rerun()
 
     with col_citations:
         st.subheader("🏷️ Citation Breakdown")
