@@ -133,10 +133,13 @@ def execute_literature_review(topic_text):
         return {"topic": topic_text, "executive_summary": summary, "full_report": report}
 
 
+PERSIST_DIR_ABS = str(Path(__file__).resolve().parent.parent / "database" / "chroma_store")
+
+
 def get_library_summary():
     try:
         import chromadb
-        client = chromadb.PersistentClient(path="./database/chroma_store")
+        client = chromadb.PersistentClient(path=PERSIST_DIR_ABS)
         collection = client.get_or_create_collection(name="unified_research_papers")
         data = collection.get(include=["metadatas"])
         metadatas = data.get("metadatas", [])
@@ -153,8 +156,8 @@ def get_library_summary():
 def reset_library():
     try:
         import shutil
-        if os.path.exists("./database/chroma_store"):
-            shutil.rmtree("./database/chroma_store")
+        if os.path.exists(PERSIST_DIR_ABS):
+            shutil.rmtree(PERSIST_DIR_ABS)
     except Exception:
         pass
 
@@ -181,16 +184,14 @@ with st.sidebar:
     )
 
     if uploaded_files:
-        for file in uploaded_files:
-            btn_key = f"btn_idx_{file.name}"
-            if st.button(f"📥 Process & Index '{file.name}'", key=btn_key):
+        if st.button("🚀 Process & Index All Uploaded Papers", type="primary", use_container_width=True):
+            total_added = 0
+            for file in uploaded_files:
                 with st.spinner(f"Parsing & indexing '{file.name}'..."):
                     count = process_pdf_upload(file)
-                    if count > 0:
-                        st.session_state.chunks_indexed += count
-                        st.success(f"Indexed {count} chunks for '{file.name}' successfully!")
-                    else:
-                        st.warning(f"No readable text found in '{file.name}'.")
+                    total_added += count
+            st.session_state.chunks_indexed += total_added
+            st.success(f"Indexed {total_added} total chunks across {len(uploaded_files)} paper(s) successfully!")
 
     st.divider()
     st.header("📋 Active Paper Library")

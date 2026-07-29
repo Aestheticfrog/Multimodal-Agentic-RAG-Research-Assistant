@@ -10,7 +10,10 @@ from langchain_core.vectorstores import VectorStoreRetriever
 
 logger = logging.getLogger("researchpilot.vectorstore")
 
-PERSIST_DIR = os.getenv("CHROMA_PERSIST_DIR", "./database/chroma_store")
+from pathlib import Path
+
+ROOT_DIR = Path(__file__).resolve().parent.parent.parent.parent
+PERSIST_DIR = os.getenv("CHROMA_PERSIST_DIR", str(ROOT_DIR / "database" / "chroma_store"))
 _vector_store_instance: Optional[Chroma] = None
 
 
