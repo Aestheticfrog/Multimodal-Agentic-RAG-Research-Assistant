@@ -3,6 +3,7 @@ import os
 import logging
 from typing import Any, List
 from dotenv import load_dotenv
+from langchain_core.runnables import Runnable
 from langchain_google_genai import ChatGoogleGenerativeAI, GoogleGenerativeAIEmbeddings
 
 load_dotenv()
@@ -18,7 +19,7 @@ GEMINI_MODEL_POOL = [
 ]
 
 
-class ResilientGeminiLLM:
+class ResilientGeminiLLM(Runnable):
     """A resilient LLM wrapper that automatically catches 429 rate limit errors
     and rotates through a pool of available Gemini models seamlessly.
     """
@@ -33,7 +34,7 @@ class ResilientGeminiLLM:
             self.pool.remove(primary_model)
             self.pool.insert(0, primary_model)
 
-    def invoke(self, input_data: Any, **kwargs) -> Any:
+    def invoke(self, input_data: Any, config: Any = None, **kwargs) -> Any:
         last_exception = None
         for model in self.pool:
             try:
@@ -42,7 +43,7 @@ class ResilientGeminiLLM:
                     temperature=self.temperature,
                     google_api_key=self.api_key,
                 )
-                return llm.invoke(input_data, **kwargs)
+                return llm.invoke(input_data, config=config, **kwargs)
             except Exception as e:
                 err_str = str(e).lower()
                 if "429" in err_str or "resource_exhausted" in err_str or "quota" in err_str:
@@ -58,8 +59,8 @@ class ResilientGeminiLLM:
         """Supports structured output with automatic model rotation."""
         parent = self
 
-        class StructuredWrapper:
-            def invoke(self, input_data: Any, **chain_kwargs) -> Any:
+        class StructuredWrapper(Runnable):
+            def invoke(self, input_data: Any, config: Any = None, **chain_kwargs) -> Any:
                 last_exc = None
                 for model in parent.pool:
                     try:
@@ -69,7 +70,7 @@ class ResilientGeminiLLM:
                             google_api_key=parent.api_key,
                         )
                         structured_llm = llm.with_structured_output(schema, **kwargs)
-                        return structured_llm.invoke(input_data, **chain_kwargs)
+                        return structured_llm.invoke(input_data, config=config, **chain_kwargs)
                     except Exception as e:
                         err_str = str(e).lower()
                         if "429" in err_str or "resource_exhausted" in err_str or "quota" in err_str:
