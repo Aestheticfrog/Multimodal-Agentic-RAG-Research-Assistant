@@ -99,11 +99,14 @@ def execute_agent_query(prompt_text):
             "citations": [],
         }
         res = researchpilot_agent.invoke(initial_state)
+        citations = res.get("citations", [])
+        unique_sources = sorted(list(set([c.get("source") for c in citations if c.get("source")])))
         return {
             "question": res.get("question", prompt_text),
             "original_question": prompt_text,
             "generation": res.get("generation", ""),
-            "citations": res.get("citations", []),
+            "citations": citations,
+            "sources": unique_sources,
             "retry_count": res.get("retry_count", 0),
         }
 
@@ -209,7 +212,10 @@ with tab_chat:
                     retry_count = info.get("retry_count", 0)
                     final_q = info.get("final_question", "")
                     orig_q = info.get("orig_question", "")
-                    with st.expander("🔍 LangGraph Agent Execution Info", expanded=(retry_count > 0)):
+                    with st.expander("🔍 LangGraph Agent Execution Info", expanded=True):
+                        sources = info.get("sources", [])
+                        if sources:
+                            st.info(f"📚 **Indexed Paper Sources in Memory:** `{', '.join(sources)}` ({len(sources)} paper(s) active)")
                         if retry_count > 0 or (final_q and final_q.strip() != orig_q.strip()):
                             st.warning(f"🔄 **Query Autocorrected / Transformed** ({retry_count} transformation loops)")
                             st.markdown(f"**Original Prompt:** `{orig_q}`")
@@ -227,6 +233,7 @@ with tab_chat:
                     st.session_state.query_count += 1
                     answer = data["generation"]
                     citations = data.get("citations", [])
+                    sources = data.get("sources", [])
                     retry_count = data.get("retry_count", 0)
                     final_question = data.get("question")
                     orig_question = data.get("original_question", prompt)
@@ -241,6 +248,7 @@ with tab_chat:
                             "retry_count": retry_count,
                             "final_question": final_question,
                             "orig_question": orig_question,
+                            "sources": sources,
                         }
 
                     st.session_state.messages.append(msg_data)
