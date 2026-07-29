@@ -211,10 +211,24 @@ with st.sidebar:
     )
 
     if uploaded_files:
+        current_file_names = sorted([f.name for f in uploaded_files])
+        last_file_names = st.session_state.get("last_uploaded_names", [])
+
         st.caption(f"📁 Selected for Indexing: **{len(uploaded_files)} PDF file(s)**")
         for f in uploaded_files:
             st.text(f"• {f.name}")
-        if st.button("🚀 Process & Index All Uploaded Papers", type="primary", use_container_width=True):
+
+        process_clicked = st.button("🚀 Process & Index All Uploaded Papers", type="primary", use_container_width=True)
+        should_process = (current_file_names != last_file_names) or process_clicked
+
+        if should_process:
+            st.session_state["in_memory_docs"] = []
+            try:
+                from backend.app.retrievers.vector_store import clear_vector_store
+                clear_vector_store()
+            except Exception:
+                pass
+
             total_added = 0
             for file in uploaded_files:
                 with st.spinner(f"Parsing & indexing '{file.name}'..."):
@@ -224,7 +238,9 @@ with st.sidebar:
                         st.warning(f"⚠️ '{file.name}' returned 0 text chunks. Check if the PDF is scanned or image-only.")
                     else:
                         st.info(f"✅ '{file.name}' indexed: {count} chunks")
-            st.session_state.chunks_indexed += total_added
+
+            st.session_state.chunks_indexed = total_added
+            st.session_state["last_uploaded_names"] = current_file_names
             st.success(f"Indexed {total_added} total chunks across {len(uploaded_files)} paper(s) successfully!")
 
 # Tabs
