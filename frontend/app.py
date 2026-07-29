@@ -52,11 +52,16 @@ def process_pdf_upload(file):
         if response.status_code == 200:
             return response.json()["chunks_indexed"]
     except Exception:
-        # Standalone direct fallback (Streamlit Cloud zero-backend mode)
-        from backend.app.utils.pdf_parser import parse_pdf_bytes
-        from backend.app.retrievers.vector_store import add_documents_to_vector_store
-        docs = parse_pdf_bytes(file.getvalue(), file.name)
-        return add_documents_to_vector_store(docs)
+        try:
+            from backend.app.utils.pdf_parser import parse_pdf_bytes
+            from backend.app.retrievers.vector_store import add_documents_to_vector_store
+            docs = parse_pdf_bytes(file.getvalue(), file.name)
+            if not docs:
+                return 0
+            return add_documents_to_vector_store(docs)
+        except Exception as e:
+            st.error(f"Failed to parse '{file.name}': {e}")
+            return 0
 
 
 def execute_agent_query(prompt_text):
@@ -177,12 +182,15 @@ with st.sidebar:
 
     if uploaded_files:
         for file in uploaded_files:
-            if st.button(f"📥 Process & Index '{file.name}'", key=file.name):
+            btn_key = f"btn_idx_{file.name}"
+            if st.button(f"📥 Process & Index '{file.name}'", key=btn_key):
                 with st.spinner(f"Parsing & indexing '{file.name}'..."):
                     count = process_pdf_upload(file)
-                    st.session_state.chunks_indexed += count
-                    st.success(f"Indexed {count} chunks successfully!")
-                    st.rerun()
+                    if count > 0:
+                        st.session_state.chunks_indexed += count
+                        st.success(f"Indexed {count} chunks for '{file.name}' successfully!")
+                    else:
+                        st.warning(f"No readable text found in '{file.name}'.")
 
     st.divider()
     st.header("📋 Active Paper Library")
