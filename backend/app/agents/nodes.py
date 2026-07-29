@@ -60,46 +60,16 @@ class GradeAnswer(BaseModel):
 
 
 def grade_documents_node(state: AgentState) -> AgentState:
-    """Evaluates whether retrieved documents are relevant to the question in a SINGLE batch LLM call.
-    Prevents API rate limits (429) while ensuring strict relevance filtering.
-    """
-    logger.info("--- NODE: GRADE DOCUMENTS (BATCH MODE) ---")
-    question = state["question"]
+    """Evaluates retrieved context presence to ensure smooth generation flow."""
+    logger.info("--- NODE: GRADE DOCUMENTS ---")
     documents = state.get("documents", [])
 
     if not documents:
-        logger.info("No documents retrieved. Web search needed.")
+        logger.info("No documents retrieved from vector store. Web search fallback needed.")
         return {**state, "web_search_needed": True}
 
-    try:
-        llm = get_gemini_llm(model_name="gemini-flash-latest", temperature=0.0)
-        formatted_docs = "\n---\n".join([f"Document {i+1}:\n{doc.page_content[:400]}" for i, doc in enumerate(documents)])
-
-        prompt = f"""You are a research evaluator. Determine if the retrieved documents contain information relevant to answer the user question.
-
-User Question: {question}
-
-Retrieved Documents:
-{formatted_docs}
-
-Evaluate overall relevance:
-If at least one document mentions concepts related to the user question, respond 'yes'.
-If NONE of the documents are relevant at all, respond 'no'.
-Respond ONLY with 'yes' or 'no'."""
-
-        res = llm.invoke(prompt)
-        content = extract_text_content(res.content).strip().lower() if hasattr(res, "content") else str(res).strip().lower()
-
-        if "no" in content and "yes" not in content:
-            logger.info("Batch document grading marked documents as irrelevant. Web search needed.")
-            return {**state, "web_search_needed": True}
-        else:
-            logger.info("Batch document grading confirmed relevant context.")
-            return {**state, "web_search_needed": False}
-
-    except Exception as e:
-        logger.warning(f"Error in batch document grading: {e}. Keeping documents by default.")
-        return {**state, "web_search_needed": False}
+    logger.info(f"Retrieved {len(documents)} document chunks from ChromaDB. Direct generation routing.")
+    return {**state, "web_search_needed": False}
 
 
 def generate_answer_node(state: AgentState) -> AgentState:
