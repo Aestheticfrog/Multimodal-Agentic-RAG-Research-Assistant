@@ -19,19 +19,12 @@ logger = logging.getLogger("researchpilot.graph")
 
 
 def retrieve_docs_node(state: AgentState) -> AgentState:
-    """Retrieves documents from Vector Store or fallback context."""
-    logger.info("--- NODE: RETRIEVE DOCUMENTS ---")
+    """Retrieves documents from Vector Store with dynamic intent detection and source-stratification."""
+    logger.info("--- NODE: RETRIEVE DOCUMENTS (ADAPTIVE MODE) ---")
     question = state["question"]
     
-    # Deferred import to prevent circular dependency
-    from backend.app.retrievers.vector_store import get_retriever
-    
-    retriever = get_retriever()
-    if retriever:
-        docs = retriever.invoke(question)
-    else:
-        logger.warning("No active retriever found. Returning empty doc list.")
-        docs = []
+    from backend.app.retrievers.vector_store import retrieve_adaptive_documents
+    docs = retrieve_adaptive_documents(question)
 
     return {
         **state,
