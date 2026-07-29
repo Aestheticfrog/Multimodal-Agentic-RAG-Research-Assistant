@@ -161,7 +161,7 @@ with st.sidebar:
     st.divider()
     st.header("📋 Active Paper Library")
     try:
-        from backend.app.retrievers.vector_store import get_indexed_sources_summary, clear_vector_store
+        from backend.app.retrievers import get_indexed_sources_summary, clear_vector_store
         sources_summary = get_indexed_sources_summary()
         if sources_summary:
             total_c = sum(sources_summary.values())
