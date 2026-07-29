@@ -417,7 +417,7 @@ with tab_metrics:
     col_m1.metric("PDF Chunks in Memory", mem_docs_count)
     col_m2.metric("Papers in Memory", mem_sources_count)
     col_m3.metric("Agent Queries Executed", st.session_state.query_count)
-    col_m4.metric("Backend Mode", "API" if IS_BACKEND_ONLINE else "Standalone")
+    col_m4.metric("Backend Mode", "REST API" if should_use_backend() else "Standalone Engine")
 
     st.divider()
     st.markdown("### 🏗️ System Architecture")
