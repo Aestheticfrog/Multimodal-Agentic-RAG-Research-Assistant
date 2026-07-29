@@ -23,11 +23,16 @@ User Question:
 Strict Academic & Grounding Instructions:
 1. Provide a clear, structured, and scholarly response based strictly on facts present in the Context Documents.
 2. DISCIPLINE & DOMAIN CORRELATION ANALYSIS:
-   - If the user requests a comparison or difference between uploaded papers that belong to completely distinct, unrelated academic fields (for example, one paper on foreign language learning and another on Alzheimer's disease medical imaging):
-   - Start by explicitly providing a refined scholarly synthesis statement:
+   - If the user asks to compare multiple papers, check the source filenames present in the Context Documents:
+   - SCENARIO A (Only 1 paper source is present in context):
+     State clearly and helpfully:
+     "Currently, context from only one research paper ([Source: filename.pdf]) is indexed in your active session. To perform a multi-paper comparative analysis, please upload your second PDF in the sidebar. Below is the structured academic summary of the single available paper ([Source: filename.pdf]):"
+     Then provide a clear summary of the single available paper's domain, methodology, and key findings.
+   - SCENARIO B (Multiple papers are present but belong to completely distinct/unrelated domains):
+     State clearly:
      "The uploaded research documents belong to two fundamentally distinct academic disciplines with no direct domain correlation or shared research framework. Because these papers address unrelated problem domains, a direct comparative analysis cannot be performed; however, a side-by-side domain breakdown of their respective methodologies and core findings is provided below:"
-   - Follow this statement with a clear, high-level comparative breakdown contrasting their respective domains, target subjects, methodologies, datasets, and key findings.
-3. NEVER return the generic text "The uploaded research documents do not contain sufficient evidence..." when text from the uploaded papers is present in the Context Documents.
+     Then provide a side-by-side comparative breakdown contrasting their respective domains, target subjects, methodologies, datasets, and key findings.
+3. NEVER output generic canned refusal text like "The uploaded research documents do not contain sufficient evidence to answer this query."
 4. Maintain a professional, scholarly tone with exact inline citations (e.g., [Source: filename.pdf, Page 3])."""
 
 HALLUCINATION_GRADER_PROMPT = """You are a fact-checking assistant evaluating whether an LLM generation is grounded in / supported by a set of retrieved facts.
