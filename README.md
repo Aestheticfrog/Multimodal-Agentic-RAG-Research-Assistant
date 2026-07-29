@@ -13,7 +13,7 @@ Powered by **LangGraph**, **Google Gemini**, **ChromaDB**, **FastAPI**, and **St
 
 ## 🌟 Key Features & Innovations
 
-- 🧠 **Agentic RAG State Machine (LangGraph)**: Combines **Adaptive RAG**, **Self-RAG**, and **Corrective RAG (CRAG)** to dynamically grade document relevance, rewrite ambiguous queries, and evaluate hallucinations before delivering answers.
+- 🌐 **Dynamic Adaptive Retrieval & Source Stratification**: Classifies query intent automatically. Fact-based queries trigger targeted high-precision search ($k=6$), while comparative queries trigger deep multi-paper candidate retrieval ($k=20$) with balanced round-robin sampling across all uploaded PDF sources.
 - 🛡️ **Resilient Failover Model Pool (`ResilientGeminiLLM`)**: Solves free-tier API rate limits (HTTP 429) by dynamically rotating requests across model candidates (`gemini-3.5-flash-lite`, `gemini-3.5-flash`, `gemini-3.1-flash-lite`, `gemini-3-flash`) in <50ms.
 - 🔒 **Context-Aware Security Guardrails**: Built-in input moderation and domain-grounding constraints to block off-topic or explicit queries while supporting objective, clinical scientific responses for medical research papers.
 - 📊 **Visual Figure & Table Commentary Mode**: Automatically detects visual query keywords (`figure`, `table`, `graph`, `plot`) and routes to specialized prompt logic for statistical chart and diagram analysis.
