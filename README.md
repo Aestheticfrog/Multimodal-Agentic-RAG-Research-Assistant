@@ -1,44 +1,82 @@
-# 🔬 ResearchPilot AI – Agentic Multimodal Research Assistant
+# 🔬 Multimodal Agentic RAG Research Assistant (ResearchPilot AI)
 
-**ResearchPilot AI** is an advanced agentic RAG system built to analyze complex research papers, perform literature reviews, and answer questions with grounded citations. Built with **LangGraph**, **Google Gemini**, **ChromaDB**, **FastAPI**, and **Streamlit**.
+[![Streamlit App](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://multimodal-agentic-rag-research-assistant-dsmrukzu4revjzyvuqor.streamlit.app/)
+[![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
+[![LangGraph](https://img.shields.io/badge/Orchestration-LangGraph-orange.svg)](https://github.com/langchain-ai/langgraph)
+[![FastAPI](https://img.shields.io/badge/Backend-FastAPI-green.svg)](https://fastapi.tiangolo.com/)
 
----
+**ResearchPilot AI** is an enterprise-grade, self-correcting RAG research assistant built to analyze complex academic papers, perform literature review synthesis, and provide grounded answers with exact source page citations.
 
-## 🌟 Key Features
-
-- 🧠 **Agentic RAG Engine (LangGraph)**: Integrates **Adaptive RAG**, **Self-RAG**, and **Corrective RAG (CRAG)** to dynamically grade document relevance, rewrite queries, and evaluate hallucinations before delivering answers.
-- 👁️ **Multimodal PDF Parsing**: Extracts text, tables, and visual diagram context using `PyMuPDF` for comprehensive paper understanding.
-- 📝 **Automated Literature Review Generator**: Generates structured synthesis reports (Executive Summary, Key Findings, Methodology Comparison, Gaps, and Future Directions).
-- 🏷️ **Grounding & Citation Breakdown**: Every generated response traces back to specific document sources and page references.
-- ⚡ **Asynchronous FastAPI Backend**: Production-ready API endpoints decoupled from the presentation layer.
-- 🎨 **Modern Streamlit Dashboard**: Clean, responsive interface featuring live agent workflow visualization and multi-document library management.
+Powered by **LangGraph**, **Google Gemini**, **ChromaDB**, **FastAPI**, and **Streamlit**.
 
 ---
 
-## 🏗️ Architecture Overview
+## 🌟 Key Features & Innovations
+
+- 🧠 **Agentic RAG State Machine (LangGraph)**: Combines **Adaptive RAG**, **Self-RAG**, and **Corrective RAG (CRAG)** to dynamically grade document relevance, rewrite ambiguous queries, and evaluate hallucinations before delivering answers.
+- 🛡️ **Resilient Failover Model Pool (`ResilientGeminiLLM`)**: Solves free-tier API rate limits (HTTP 429) by dynamically rotating requests across model candidates (`gemini-3.5-flash-lite`, `gemini-3.5-flash`, `gemini-3.1-flash-lite`, `gemini-3-flash`) in <50ms.
+- 🔒 **Context-Aware Security Guardrails**: Built-in input moderation and domain-grounding constraints to block off-topic or explicit queries while supporting objective, clinical scientific responses for medical research papers.
+- 📊 **Visual Figure & Table Commentary Mode**: Automatically detects visual query keywords (`figure`, `table`, `graph`, `plot`) and routes to specialized prompt logic for statistical chart and diagram analysis.
+- 🔄 **Transparent Query Optimization Breakdown**: Interactive UI expander displaying side-by-side comparison of original user prompts vs. agent-rewritten search queries.
+- 📈 **Live Resume Analytics Dashboard**: Real-time tracking of executed queries, indexed PDF chunks, literature reviews generated, and citation precision.
+- 👁️ **Multimodal PDF Parsing**: Zero-dependency paragraph text chunking via `PyMuPDF` with native ChromaDB ONNX local embedding fallback.
+- 🚀 **Dual Deployment Support**: Runs either as a decoupled **FastAPI REST API** or as a 1-click **Streamlit Cloud** standalone application.
+
+---
+
+## 🏗️ System Architecture
 
 ```text
-                     ┌────────────────────────┐
-                     │    Streamlit UI        │
-                     └───────────┬────────────┘
-                                 │ HTTP
-                                 ▼
-                     ┌────────────────────────┐
-                     │    FastAPI Server      │
-                     └───────────┬────────────┘
-                                 │
-                 ┌───────────────┴───────────────┐
-                 ▼                               ▼
-    ┌─────────────────────────┐     ┌─────────────────────────┐
-    │  LangGraph Agent Engine │     │  ChromaDB Vector Store  │
-    │  (Adaptive/Self RAG)    │     └─────────────────────────┘
-    └────────────┬────────────┘
-                 │
-                 ▼
-    ┌─────────────────────────┐
-    │  Google Gemini 2.5/3.0  │
-    └─────────────────────────┘
+                               ┌────────────────────────────────┐
+                               │     Streamlit Dashboard /      │
+                               │   Streamlit Cloud Interface    │
+                               └───────────────┬────────────────┘
+                                               │
+                       ┌───────────────────────┴───────────────────────┐
+                       │ REST API Request / Direct Fallback Invocation │
+                       ▼                                               ▼
+          ┌─────────────────────────┐                     ┌─────────────────────────┐
+          │  FastAPI REST Server    │                     │  Security Guardrail &   │
+          │  (/api/v1/query)        │                     │  Input Moderation       │
+          └────────────┬────────────┘                     └────────────┬────────────┘
+                       │                                               │
+                       └───────────────────────┬───────────────────────┘
+                                               ▼
+                                  ┌───────────────────────────┐
+                                  │   LangGraph Agent Engine  │
+                                  │  (Cyclic State Machine)   │
+                                  └────────────┬──────────────┘
+                                               │
+       ┌───────────────────────┬───────────────┴───────────────┬───────────────────────┐
+       ▼                       ▼                               ▼                       ▼
+┌──────────────┐     ┌───────────────────┐           ┌───────────────────┐   ┌───────────────────┐
+│ Retrieve     │ ──▶ │ Document Relevance│ ──(Yes)─▶ │ Generate Answer   │ ▶ │ Hallucination     │
+│ Chunks       │     │ Batch Grader      │           │ & Citations       │   │ Evaluator         │
+└──────────────┘     └─────────┬─────────┘           └───────────────────┘   └─────────┬─────────┘
+                               │ (No)                                                  │ (Not Grounded)
+                               ▼                                                       ▼
+                     ┌───────────────────┐                                   ┌───────────────────┐
+                     │ Transform Query   │ ◀─────────────────────────────────│ Query Refinement  │
+                     │ Node (Max 3 Loops)│                                   └───────────────────┘
+                     └───────────────────┘
+                               │
+                               ▼
+                     ┌───────────────────┐
+                     │ Resilient Gemini  │
+                     │ Model Pool (429)  │
+                     └───────────────────┘
 ```
+
+---
+
+## 🛠️ Tech Stack
+
+- **Agentic Orchestration**: `LangGraph`, `LangChain`
+- **LLM Engine**: Google Gemini (`ResilientGeminiLLM` Failover Pool)
+- **Vector Database**: `ChromaDB` (with ONNX `all-MiniLM-L6-v2` Fallback)
+- **Document Processing**: `PyMuPDF` (`fitz`)
+- **Backend REST API**: `FastAPI`, `Uvicorn`, `Pydantic`
+- **Frontend Dashboard**: `Streamlit`
 
 ---
 
@@ -48,47 +86,42 @@
 - Python 3.10+
 - Google Gemini API Key ([Get a free key here](https://aistudio.google.com/))
 
-### 2. Environment Setup
+### 2. Installation
 
 ```bash
-# Clone repository & navigate to project folder
-cd ResearchPilot_AI
+# Clone the repository
+git clone https://github.com/Aestheticfrog/Multimodal-Agentic-RAG-Research-Assistant.git
+cd Multimodal-Agentic-RAG-Research-Assistant
 
-# Create virtual environment
+# Create and activate a virtual environment
 python -m venv venv
-
-# Activate environment
-# On Windows:
+# Windows:
 venv\Scripts\activate
-# On macOS/Linux:
+# macOS/Linux:
 source venv/bin/activate
 
 # Install dependencies
 pip install -r requirements.txt
 ```
 
-### 3. API Key Configuration
+### 3. Environment Configuration
 
-Copy `.env.example` to `.env` and fill in your Gemini API Key:
+Create a `.env` file in the root directory:
 
-```bash
-cp .env.example .env
-```
-
-Edit `.env`:
 ```env
-GOOGLE_API_KEY=your_actual_gemini_api_key
+GOOGLE_API_KEY=your_actual_gemini_api_key_here
+BACKEND_URL=http://localhost:8000
 ```
 
-### 4. Running the Application
+### 4. Running Locally
 
-**Start the FastAPI Backend:**
+**Start the FastAPI Backend Server:**
 ```bash
 uvicorn backend.app.main:app --reload --port 8000
 ```
-*API Documentation available at `http://localhost:8000/docs`*
+*Interactive Swagger OpenAPI docs will be available at `http://localhost:8000/docs`*
 
-**Start the Streamlit Frontend:**
+**Start the Streamlit Frontend Dashboard:**
 ```bash
 streamlit run frontend/app.py
 ```
@@ -96,11 +129,20 @@ streamlit run frontend/app.py
 
 ---
 
-## 🧪 Tech Stack
+## ☁️ Deployment
 
-- **Orchestration**: `LangGraph`, `LangChain`
-- **LLM & Vision**: `google-genai` / `langchain-google-genai` (`gemini-2.5-flash`)
-- **Vector Database**: `ChromaDB`
-- **Backend API**: `FastAPI`, `Uvicorn`, `Pydantic`
-- **Frontend UI**: `Streamlit`
-- **Document Processing**: `PyMuPDF` (FitZ)
+### Streamlit Community Cloud (1-Click Deployment)
+1. Fork / Push this repository to GitHub.
+2. Log into [share.streamlit.io](https://share.streamlit.io/).
+3. Set **Main file path** to `frontend/app.py`.
+4. In **Settings -> Secrets**, add:
+   ```toml
+   GOOGLE_API_KEY = "your_actual_gemini_api_key_here"
+   ```
+5. Click **Deploy!**
+
+---
+
+## 📄 License
+
+This project is open-source and available under the [MIT License](LICENSE).
